@@ -68,21 +68,25 @@ async function getSystemStatus() {
     // Get recent logs
     const logsResult = await tursoClient.execute({
       sql: 'SELECT * FROM logs ORDER BY created_at DESC LIMIT 10',
+      args: [],
     });
 
     // Get latest metrics
     const metricsResult = await tursoClient.execute({
       sql: 'SELECT * FROM growth_metrics ORDER BY created_at DESC LIMIT 5',
+      args: [],
     });
 
     // Get evolution history
     const evolutionResult = await tursoClient.execute({
       sql: 'SELECT * FROM evolution_history ORDER BY created_at DESC LIMIT 5',
+      args: [],
     });
 
     // Get active content
     const contentResult = await tursoClient.execute({
       sql: 'SELECT * FROM dynamic_content WHERE is_active = 1 ORDER BY updated_at DESC',
+      args: [],
     });
 
     return {
@@ -105,6 +109,7 @@ async function getRecentLogs() {
   try {
     const result = await tursoClient.execute({
       sql: 'SELECT * FROM logs ORDER BY created_at DESC LIMIT 50',
+      args: [],
     });
     return result.rows;
   } catch (error) {
