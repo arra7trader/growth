@@ -1,0 +1,250 @@
+import { Octokit } from '@octokit/rest';
+
+const octokit = new Octokit({
+  auth: process.env.GITHUB_TOKEN,
+});
+
+const GITHUB_OWNER = process.env.GITHUB_OWNER || 'arra7trader';
+const GITHUB_REPO = process.env.GITHUB_REPO || 'growth';
+
+export interface FileChange {
+  path: string;
+  content: string;
+  message: string;
+}
+
+export interface EvolutionProposal {
+  type: 'feature' | 'bugfix' | 'optimization' | 'content' | 'seo';
+  title: string;
+  description: string;
+  files: FileChange[];
+  priority: 'low' | 'medium' | 'high' | 'critical';
+}
+
+/**
+ * Get the current content of a file from GitHub
+ */
+export async function getFileContent(filePath: string): Promise<{ content: string; sha: string } | null> {
+  try {
+    const response = await octokit.repos.getContent({
+      owner: GITHUB_OWNER,
+      repo: GITHUB_REPO,
+      path: filePath,
+    });
+
+    if ('content' in response.data) {
+      const content = Buffer.from(response.data.content, 'base64').toString('utf-8');
+      return { content, sha: response.data.sha };
+    }
+
+    return null;
+  } catch (error: any) {
+    if (error.status === 404) {
+      return null; // File doesn't exist
+    }
+    throw error;
+  }
+}
+
+/**
+ * Create or update a file in GitHub
+ */
+export async function updateFile(filePath: string, content: string, message: string): Promise<{ commitSha: string; url: string }> {
+  try {
+    const existingFile = await getFileContent(filePath);
+
+    const response = await octokit.repos.createOrUpdateFileContents({
+      owner: GITHUB_OWNER,
+      repo: GITHUB_REPO,
+      path: filePath,
+      message: message,
+      content: Buffer.from(content).toString('base64'),
+      sha: existingFile?.sha,
+      branch: 'main',
+    });
+
+    return {
+      commitSha: response.data.commit.sha,
+      url: response.data.commit.html_url,
+    };
+  } catch (error: any) {
+    console.error('Failed to update file:', error);
+    throw error;
+  }
+}
+
+/**
+ * Execute multiple file changes in a single commit
+ */
+export async function commitChanges(changes: FileChange[], commitMessage: string): Promise<{ commitSha: string; url: string }> {
+  try {
+    // For multiple files, we need to use the Git Data API
+    // First, get the current commit
+    const currentCommit = await octokit.repos.getBranch({
+      owner: GITHUB_OWNER,
+      repo: GITHUB_REPO,
+      branch: 'main',
+    });
+
+    const currentSha = currentCommit.data.commit.sha;
+
+    // Create blobs for each file
+    const blobs = await Promise.all(
+      changes.map(async (change) => {
+        const blob = await octokit.git.createBlob({
+          owner: GITHUB_OWNER,
+          repo: GITHUB_REPO,
+          content: change.content,
+          encoding: 'utf-8',
+        });
+        return { path: change.path, sha: blob.data.sha };
+      })
+    );
+
+    // Get the current tree
+    const currentTree = await octokit.git.getTree({
+      owner: GITHUB_OWNER,
+      repo: GITHUB_REPO,
+      tree_sha: currentCommit.data.commit.tree.sha,
+    });
+
+    // Create new tree with updated files
+    const tree = blobs.map((blob) => ({
+      path: blob.path,
+      mode: '100644' as const,
+      type: 'blob' as const,
+      sha: blob.sha,
+    }));
+
+    const newTree = await octokit.git.createTree({
+      owner: GITHUB_OWNER,
+      repo: GITHUB_REPO,
+      tree,
+      base_tree: currentTree.data.sha,
+    });
+
+    // Create new commit
+    const newCommit = await octokit.git.createCommit({
+      owner: GITHUB_OWNER,
+      repo: GITHUB_REPO,
+      message: commitMessage,
+      tree: newTree.data.sha,
+      parents: [currentCommit.data.commit.sha],
+    });
+
+    // Update the branch reference
+    await octokit.git.updateRef({
+      owner: GITHUB_OWNER,
+      repo: GITHUB_REPO,
+      ref: 'heads/main',
+      sha: newCommit.data.sha,
+    });
+
+    return {
+      commitSha: newCommit.data.sha,
+      url: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/commit/${newCommit.data.sha}`,
+    };
+  } catch (error: any) {
+    console.error('Failed to commit changes:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create a pull request for the changes
+ */
+export async function createPullRequest(
+  branch: string,
+  title: string,
+  body: string
+): Promise<{ prNumber: number; url: string }> {
+  try {
+    const response = await octokit.pulls.create({
+      owner: GITHUB_OWNER,
+      repo: GITHUB_REPO,
+      title,
+      body,
+      head: branch,
+      base: 'main',
+    });
+
+    return {
+      prNumber: response.data.number,
+      url: response.data.html_url,
+    };
+  } catch (error: any) {
+    console.error('Failed to create pull request:', error);
+    throw error;
+  }
+}
+
+/**
+ * Self-Coding: Execute an evolution proposal
+ */
+export async function executeEvolution(proposal: EvolutionProposal): Promise<{
+  success: boolean;
+  commitSha?: string;
+  url?: string;
+  error?: string;
+}> {
+  try {
+    const timestamp = new Date().toISOString();
+    const commitMessage = `[AUTO] ${proposal.type}: ${proposal.title}\n\n${proposal.description}\n\nGenerated by Aether Autonomous System at ${timestamp}`;
+
+    // Apply all file changes
+    const result = await commitChanges(proposal.files, commitMessage);
+
+    // Log the evolution
+    await logEvolution(proposal, result.commitSha);
+
+    return {
+      success: true,
+      commitSha: result.commitSha,
+      url: result.url,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Log evolution to database
+ */
+async function logEvolution(proposal: EvolutionProposal, commitSha: string) {
+  try {
+    const dbModule = await import('./db');
+    const tursoClient = dbModule.default;
+  
+    await tursoClient.execute({
+      sql: `
+        INSERT INTO evolution_history (
+          cycle_number,
+          decision_type,
+          decision_data,
+          implementation_status,
+          github_commit_hash
+        ) VALUES (?, ?, ?, ?, ?)
+      `,
+      args: [
+        Date.now(),
+        proposal.type,
+        JSON.stringify(proposal),
+        'implemented',
+        commitSha,
+      ],
+    });
+  } catch (error) {
+    console.error('Failed to log evolution:', error);
+  }
+}
+
+export default {
+  getFileContent,
+  updateFile,
+  commitChanges,
+  createPullRequest,
+  executeEvolution,
+};
