@@ -187,9 +187,9 @@ async function getCurrentMetrics() {
     });
 
     return {
-      traffic: Math.round(trafficResult.rows[0]?.avg_traffic || 100),
-      revenue: Math.round(revenueResult.rows[0]?.total_revenue || 0),
-      activeFeatures: featuresResult.rows[0]?.feature_count || 1,
+      traffic: Math.round(Number(trafficResult.rows[0]?.avg_traffic) || 100),
+      revenue: Math.round(Number(revenueResult.rows[0]?.total_revenue) || 0),
+      activeFeatures: Number(featuresResult.rows[0]?.feature_count) || 1,
       conversionRate: 2.5, // Default placeholder
     };
   } catch (error) {

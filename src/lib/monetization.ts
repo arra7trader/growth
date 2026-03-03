@@ -97,7 +97,7 @@ export async function createLockedFeature(
     });
 
     return {
-      featureId: result.lastInsertRowid as number,
+      featureId: Number(result.lastInsertRowid) || 0,
       success: true,
     };
   } catch (error: any) {
@@ -120,14 +120,14 @@ export async function optimizeAdPlacement(): Promise<{
     // Get current CTR metrics
     const ctrResult = await tursoClient.execute({
       sql: `
-        SELECT AVG(value) as avg_ctr 
-        FROM growth_metrics 
-        WHERE metric_type = 'ctr' 
+        SELECT AVG(value) as avg_ctr
+        FROM growth_metrics
+        WHERE metric_type = 'ctr'
         AND created_at > datetime('now', '-7 days')
       `,
     });
 
-    const avgCtr = ctrResult.rows[0]?.avg_ctr || 0;
+    const avgCtr = Number(ctrResult.rows[0]?.avg_ctr) || 0;
 
     const recommendedChanges: string[] = [];
     let strategy: MonetizationConfig['adPlacementStrategy'] = 'conservative';

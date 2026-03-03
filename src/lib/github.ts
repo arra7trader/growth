@@ -64,8 +64,8 @@ export async function updateFile(filePath: string, content: string, message: str
     });
 
     return {
-      commitSha: response.data.commit.sha,
-      url: response.data.commit.html_url,
+      commitSha: response.data.commit.sha || '',
+      url: response.data.commit.html_url || '',
     };
   } catch (error: any) {
     console.error('Failed to update file:', error);
@@ -105,7 +105,7 @@ export async function commitChanges(changes: FileChange[], commitMessage: string
     const currentTree = await octokit.git.getTree({
       owner: GITHUB_OWNER,
       repo: GITHUB_REPO,
-      tree_sha: currentCommit.data.commit.tree.sha,
+      tree_sha: (currentCommit.data.commit as any).tree?.sha || '',
     });
 
     // Create new tree with updated files
