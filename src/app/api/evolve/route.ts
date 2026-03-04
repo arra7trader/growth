@@ -270,6 +270,23 @@ function safeNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function getCryptoSnapshotQuality(status: Record<string, any> | null | undefined): number {
+  if (!status) {
+    return 0;
+  }
+
+  const cryptoStatus = status.admin?.cryptoStatus || {};
+  const opportunities = Array.isArray(status.admin?.cryptoOpportunities) ? status.admin.cryptoOpportunities.length : 0;
+  const submissions = Array.isArray(status.admin?.cryptoSubmissions) ? status.admin.cryptoSubmissions.length : 0;
+
+  const total = safeNumber(cryptoStatus.lastTotal);
+  const github = safeNumber(cryptoStatus.sources?.github);
+  const lane = safeNumber(cryptoStatus.sources?.laneEligible);
+  const queryFailures = safeNumber(cryptoStatus.sources?.queryFailures);
+
+  return total * 6 + github + lane * 2 + opportunities * 3 + submissions * 4 - queryFailures * 2;
+}
+
 function buildMirrorPayload(status: Record<string, any>) {
   return {
     capturedAt: new Date().toISOString(),
@@ -310,7 +327,11 @@ function shouldPreferMirror(liveStatus: Record<string, any>, mirrorData: Record<
       safeNumber(liveCrypto.sources?.queries) >= 1 &&
       safeNumber(liveCrypto.lastActions) === 0);
 
-  return mirrorRunMs > liveRunMs && liveLooksSparse;
+  const liveQuality = getCryptoSnapshotQuality(liveStatus);
+  const mirrorQuality = getCryptoSnapshotQuality(mirrorData);
+  const mirrorNotTooOld = Date.now() - toMs(mirrorData.capturedAt) <= 24 * 60 * 60 * 1000;
+
+  return liveLooksSparse && mirrorNotTooOld && mirrorQuality > liveQuality;
 }
 
 function applyMirror(liveStatus: Record<string, any>, mirrorData: Record<string, any>) {
@@ -606,7 +627,13 @@ async function getSystemStatus() {
       : liveStatus;
 
     const mirrorPayload = buildMirrorPayload(statusWithMirror);
-    const mirrorWrite = await writeSystemStatusMirror(mirrorPayload as Record<string, unknown>, 'api_evolve_status');
+    const existingMirror = await readSystemStatusMirror();
+    const nextQuality = getCryptoSnapshotQuality(mirrorPayload);
+    const existingQuality = getCryptoSnapshotQuality(existingMirror?.data || null);
+    const shouldWriteMirror = nextQuality >= existingQuality || existingQuality <= 0;
+    const mirrorWrite = shouldWriteMirror
+      ? await writeSystemStatusMirror(mirrorPayload as Record<string, unknown>, 'api_evolve_status')
+      : { written: false, reason: 'skipped_lower_quality_snapshot' };
 
     return {
       ...statusWithMirror,
