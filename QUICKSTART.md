@@ -90,6 +90,7 @@ curl -X POST http://localhost:3000/api/track \
 - Engine crypto otomatis membuat action queue + draft submission.
 - Engine mencoba auto-submit langsung untuk target GitHub jika `GITHUB_TOKEN` tersedia.
 - Jika token tidak ada, hasil tetap diproses ke mode `outbox`.
+- Retry/backoff otomatis aktif dengan limit `CRYPTO_EXECUTOR_MAX_ATTEMPTS`.
 - Pantau di dashboard tab `Admin` bagian `Crypto Revenue Engine`.
 
 Expect:

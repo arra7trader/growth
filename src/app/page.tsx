@@ -130,6 +130,13 @@ interface AdminCryptoStatus {
     lastPrepared?: number;
     lastFailed?: number;
     lastError?: string | null;
+    maxAttempts?: number;
+    queue?: {
+      queued?: number;
+      inProgress?: number;
+      completed?: number;
+      skipped?: number;
+    };
   };
 }
 
@@ -865,6 +872,10 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
               <InfoBox label="Processed" value={String(safeNumber(cryptoStatus.executor?.lastProcessed))} />
               <InfoBox label="Submitted / Prepared" value={`${safeNumber(cryptoStatus.executor?.lastSubmitted)} / ${safeNumber(cryptoStatus.executor?.lastPrepared)}`} />
               <InfoBox label="Failed" value={String(safeNumber(cryptoStatus.executor?.lastFailed))} accent={safeNumber(cryptoStatus.executor?.lastFailed) > 0 ? 'destructive' : undefined} />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Max attempts per task: <span className="text-foreground">{safeNumber(cryptoStatus.executor?.maxAttempts)}</span>
+              {' | '}Queue: queued {safeNumber(cryptoStatus.executor?.queue?.queued)}, in-progress {safeNumber(cryptoStatus.executor?.queue?.inProgress)}, completed {safeNumber(cryptoStatus.executor?.queue?.completed)}, skipped {safeNumber(cryptoStatus.executor?.queue?.skipped)}
             </div>
             {cryptoStatus.lastError && (
               <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">

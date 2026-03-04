@@ -5,6 +5,7 @@ const DEFAULT_ENGINE_INTERVAL_MINUTES = 30;
 const DEFAULT_MAX_ITEMS_PER_QUERY = 20;
 const DEFAULT_STORE_LIMIT = 40;
 const DEFAULT_EXECUTOR_LIMIT_PER_CYCLE = 5;
+const DEFAULT_EXECUTOR_MAX_ATTEMPTS = 3;
 
 interface GithubIssue {
   html_url: string;
@@ -54,6 +55,7 @@ export interface CryptoActionTask {
   execution?: {
     attempts: number;
     lastAttemptAt: string | null;
+    nextAttemptAt: string | null;
     lastResult: 'submitted' | 'prepared' | 'failed' | 'skipped' | null;
     lastError: string | null;
   };
@@ -121,6 +123,29 @@ function parseRewardEstimateUsd(text: string): number {
   }
 
   return 0;
+}
+
+function parseDeadlineFromText(text: string): string | null {
+  const normalized = text.replace(/\s+/g, ' ');
+  const patterns = [
+    /\b(?:deadline|due|ends?)\s*[:\-]?\s*(\d{4}-\d{2}-\d{2})\b/i,
+    /\b(?:deadline|due|ends?)\s*[:\-]?\s*(\d{1,2}\/\d{1,2}\/\d{4})\b/i,
+    /\b(?:deadline|due|ends?)\s*[:\-]?\s*([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (!match?.[1]) {
+      continue;
+    }
+
+    const candidate = new Date(match[1]);
+    if (!Number.isNaN(candidate.getTime())) {
+      return candidate.toISOString();
+    }
+  }
+
+  return null;
 }
 
 function opportunityCategoryFromText(text: string): CryptoOpportunity['category'] {
@@ -224,6 +249,7 @@ function issueToOpportunity(issue: GithubIssue): CryptoOpportunity | null {
   const combined = `${title}\n${body}`;
   const category = opportunityCategoryFromText(combined);
   const rewardEstimateUsd = parseRewardEstimateUsd(combined);
+  const deadlineAt = parseDeadlineFromText(combined);
   const labelNames = (issue.labels || []).map((label) => String(label.name || '').trim()).filter(Boolean);
   const summary = compactText(body || title, 240);
   const score = estimateOpportunityScore({
@@ -247,6 +273,7 @@ function issueToOpportunity(issue: GithubIssue): CryptoOpportunity | null {
     metadata: {
       author: issue.user?.login || null,
       repositoryUrl: issue.repository_url || null,
+      deadlineAt,
     },
   };
 }
@@ -264,6 +291,24 @@ function actionPriority(score: number): CryptoActionTask['priority'] {
 function dueAtFromScore(score: number): string {
   const hours = score >= 75 ? 6 : score >= 45 ? 18 : 36;
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
+
+function dueAtFromOpportunity(opportunity: CryptoOpportunity): string {
+  const scoreDueAt = dueAtFromScore(opportunity.score);
+  const metadata = opportunity.metadata as { deadlineAt?: unknown } | undefined;
+  const deadlineValue = metadata?.deadlineAt ? String(metadata.deadlineAt) : '';
+  if (!deadlineValue) {
+    return scoreDueAt;
+  }
+
+  const deadline = new Date(deadlineValue);
+  if (Number.isNaN(deadline.getTime())) {
+    return scoreDueAt;
+  }
+
+  const bufferDeadline = new Date(deadline.getTime() - 2 * 60 * 60 * 1000);
+  const scoreDue = new Date(scoreDueAt);
+  return bufferDeadline.getTime() < scoreDue.getTime() ? bufferDeadline.toISOString() : scoreDueAt;
 }
 
 function buildRunbook(opportunity: CryptoOpportunity) {
@@ -317,8 +362,15 @@ function opportunityToActionTask(opportunity: CryptoOpportunity): CryptoActionTa
     score: opportunity.score,
     rewardEstimateUsd: opportunity.rewardEstimateUsd,
     targetUrl: opportunity.url,
-    dueAt: dueAtFromScore(opportunity.score),
+    dueAt: dueAtFromOpportunity(opportunity),
     runbook,
+    execution: {
+      attempts: 0,
+      lastAttemptAt: null,
+      nextAttemptAt: new Date().toISOString(),
+      lastResult: null,
+      lastError: null,
+    },
     updatedAt,
   };
 }
@@ -379,6 +431,13 @@ function parseActionTaskRecord(contentKey: unknown, contentData: unknown, update
     return {
       ...parsed,
       key: String(parsed.key || contentKey || ''),
+      execution: {
+        attempts: parsed.execution?.attempts || 0,
+        lastAttemptAt: parsed.execution?.lastAttemptAt || null,
+        nextAttemptAt: parsed.execution?.nextAttemptAt || null,
+        lastResult: parsed.execution?.lastResult || null,
+        lastError: parsed.execution?.lastError || null,
+      },
       updatedAt: String(parsed.updatedAt || updatedAt || new Date().toISOString()),
     };
   } catch {
@@ -611,6 +670,9 @@ async function submitToGithubIssueComment(task: CryptoActionTask): Promise<Submi
 }
 
 async function loadExecutableActionTasks(limit: number): Promise<CryptoActionTask[]> {
+  const maxAttempts = Number(process.env.CRYPTO_EXECUTOR_MAX_ATTEMPTS || DEFAULT_EXECUTOR_MAX_ATTEMPTS) || DEFAULT_EXECUTOR_MAX_ATTEMPTS;
+  const now = Date.now();
+
   const result = await tursoClient.execute({
     sql: `
       SELECT content_key, content_data, updated_at
@@ -625,20 +687,79 @@ async function loadExecutableActionTasks(limit: number): Promise<CryptoActionTas
   const tasks = result.rows
     .map((row) => parseActionTaskRecord(row.content_key, row.content_data, row.updated_at))
     .filter((item): item is CryptoActionTask => Boolean(item))
-    .filter((task) => task.status === 'queued' || task.status === 'in_progress');
+    .filter((task) => task.status === 'queued' || task.status === 'in_progress')
+    .filter((task) => (task.execution?.attempts || 0) < maxAttempts)
+    .filter((task) => {
+      const nextAttemptAt = task.execution?.nextAttemptAt;
+      if (!nextAttemptAt) {
+        return true;
+      }
+      const next = new Date(nextAttemptAt).getTime();
+      return Number.isFinite(next) ? next <= now : true;
+    });
 
-  tasks.sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority) || b.score - a.score);
+  tasks.sort((a, b) => {
+    const dueA = new Date(a.dueAt || 0).getTime() || Number.MAX_SAFE_INTEGER;
+    const dueB = new Date(b.dueAt || 0).getTime() || Number.MAX_SAFE_INTEGER;
+    return priorityRank(b.priority) - priorityRank(a.priority) || dueA - dueB || b.score - a.score;
+  });
   return tasks.slice(0, Math.max(1, limit));
 }
 
+async function getActionQueueSnapshot() {
+  const result = await tursoClient.execute({
+    sql: `
+      SELECT content_data
+      FROM dynamic_content
+      WHERE content_type = 'crypto_action_task'
+      ORDER BY updated_at DESC
+      LIMIT 300
+    `,
+    args: [],
+  });
+
+  let queued = 0;
+  let inProgress = 0;
+  let completed = 0;
+  let skipped = 0;
+
+  for (const row of result.rows) {
+    const task = parseActionTaskRecord('', row.content_data, null);
+    if (!task) {
+      continue;
+    }
+    if (task.status === 'queued') {
+      queued += 1;
+    } else if (task.status === 'in_progress') {
+      inProgress += 1;
+    } else if (task.status === 'completed') {
+      completed += 1;
+    } else if (task.status === 'skipped') {
+      skipped += 1;
+    }
+  }
+
+  return {
+    queued,
+    inProgress,
+    completed,
+    skipped,
+  };
+}
+
 async function executeActionTask(task: CryptoActionTask): Promise<SubmissionOutcome> {
+  const maxAttempts = Number(process.env.CRYPTO_EXECUTOR_MAX_ATTEMPTS || DEFAULT_EXECUTOR_MAX_ATTEMPTS) || DEFAULT_EXECUTOR_MAX_ATTEMPTS;
+  const previousAttempts = task.execution?.attempts || 0;
+  const currentAttempts = previousAttempts + 1;
+
   const processing: CryptoActionTask = {
     ...task,
     status: 'in_progress',
     updatedAt: new Date().toISOString(),
     execution: {
-      attempts: (task.execution?.attempts || 0) + 1,
+      attempts: currentAttempts,
       lastAttemptAt: new Date().toISOString(),
+      nextAttemptAt: null,
       lastResult: task.execution?.lastResult || null,
       lastError: null,
     },
@@ -649,7 +770,14 @@ async function executeActionTask(task: CryptoActionTask): Promise<SubmissionOutc
 
   const finished: CryptoActionTask = {
     ...processing,
-    status: outcome.state === 'failed' ? 'queued' : outcome.state === 'skipped' ? 'skipped' : 'completed',
+    status:
+      outcome.state === 'failed'
+        ? currentAttempts >= maxAttempts
+          ? 'skipped'
+          : 'queued'
+        : outcome.state === 'skipped'
+        ? 'skipped'
+        : 'completed',
     submission: {
       channel: outcome.channel,
       state: outcome.state,
@@ -658,8 +786,12 @@ async function executeActionTask(task: CryptoActionTask): Promise<SubmissionOutc
       submittedAt: new Date().toISOString(),
     },
     execution: {
-      attempts: processing.execution?.attempts || 1,
+      attempts: currentAttempts,
       lastAttemptAt: new Date().toISOString(),
+      nextAttemptAt:
+        outcome.state === 'failed' && currentAttempts < maxAttempts
+          ? new Date(Date.now() + Math.min(60, 5 * currentAttempts) * 60 * 1000).toISOString()
+          : null,
       lastResult: outcome.state,
       lastError: outcome.error || null,
     },
@@ -705,12 +837,18 @@ async function runCryptoActionExecutor(limit = DEFAULT_EXECUTOR_LIMIT_PER_CYCLE)
     executorError = error instanceof Error ? error.message : String(error);
   }
 
+  const queueSnapshot = await getActionQueueSnapshot();
+
   await Promise.all([
     setSetting('crypto_executor_last_run_at', new Date().toISOString()),
     setSetting('crypto_executor_last_processed', String(processed)),
     setSetting('crypto_executor_last_submitted', String(submitted)),
     setSetting('crypto_executor_last_prepared', String(prepared)),
     setSetting('crypto_executor_last_failed', String(failed)),
+    setSetting('crypto_executor_queue_queued', String(queueSnapshot.queued)),
+    setSetting('crypto_executor_queue_in_progress', String(queueSnapshot.inProgress)),
+    setSetting('crypto_executor_queue_completed', String(queueSnapshot.completed)),
+    setSetting('crypto_executor_queue_skipped', String(queueSnapshot.skipped)),
     setSetting('crypto_executor_last_error', executorError),
   ]);
 
@@ -719,6 +857,7 @@ async function runCryptoActionExecutor(limit = DEFAULT_EXECUTOR_LIMIT_PER_CYCLE)
     submitted,
     prepared,
     failed,
+    queue: queueSnapshot,
     error: executorError || null,
   });
 
@@ -727,6 +866,7 @@ async function runCryptoActionExecutor(limit = DEFAULT_EXECUTOR_LIMIT_PER_CYCLE)
     submitted,
     prepared,
     failed,
+    queue: queueSnapshot,
     error: executorError || null,
   };
 }
@@ -787,6 +927,10 @@ export async function getCryptoEngineStatus() {
     executorLastPrepared,
     executorLastFailed,
     executorLastError,
+    executorQueueQueued,
+    executorQueueInProgress,
+    executorQueueCompleted,
+    executorQueueSkipped,
   ] = await Promise.all([
     getSetting('crypto_engine_last_run_at'),
     getSetting('crypto_engine_last_error'),
@@ -801,6 +945,10 @@ export async function getCryptoEngineStatus() {
     getSetting('crypto_executor_last_prepared'),
     getSetting('crypto_executor_last_failed'),
     getSetting('crypto_executor_last_error'),
+    getSetting('crypto_executor_queue_queued'),
+    getSetting('crypto_executor_queue_in_progress'),
+    getSetting('crypto_executor_queue_completed'),
+    getSetting('crypto_executor_queue_skipped'),
   ]);
 
   return {
@@ -818,6 +966,13 @@ export async function getCryptoEngineStatus() {
       lastPrepared: Number(executorLastPrepared || 0) || 0,
       lastFailed: Number(executorLastFailed || 0) || 0,
       lastError: executorLastError || null,
+      maxAttempts: Number(process.env.CRYPTO_EXECUTOR_MAX_ATTEMPTS || DEFAULT_EXECUTOR_MAX_ATTEMPTS) || DEFAULT_EXECUTOR_MAX_ATTEMPTS,
+      queue: {
+        queued: Number(executorQueueQueued || 0) || 0,
+        inProgress: Number(executorQueueInProgress || 0) || 0,
+        completed: Number(executorQueueCompleted || 0) || 0,
+        skipped: Number(executorQueueSkipped || 0) || 0,
+      },
     },
   };
 }
