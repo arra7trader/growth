@@ -7,6 +7,7 @@ const DEFAULT_MIRROR_PATH = 'generated/runtime/system-status-mirror.json';
 const DEFAULT_MIRROR_MIN_WRITE_INTERVAL_SECONDS = 180;
 const DEFAULT_MIRROR_ISSUE_TITLE = '[AETHER] Runtime Status Mirror';
 const MIRROR_COMMENT_MARKER = '<!-- AETHER_SYSTEM_STATUS_MIRROR_V1 -->';
+const LOCKED_MIRROR_MODE: 'repo_file' = 'repo_file';
 
 let lastWriteAtMs = 0;
 let lastWriteFingerprint = '';
@@ -37,11 +38,8 @@ function getMinWriteIntervalSeconds(): number {
 }
 
 function getMirrorMode(): 'auto' | 'repo_file' | 'issue_comment' {
-  const raw = String(process.env.AETHER_GITHUB_MIRROR_MODE || 'auto').trim().toLowerCase();
-  if (raw === 'repo_file' || raw === 'issue_comment') {
-    return raw;
-  }
-  return 'auto';
+  // Locked by product decision: use repo-file mirror only.
+  return LOCKED_MIRROR_MODE;
 }
 
 function getMirrorIssueTitle(): string {

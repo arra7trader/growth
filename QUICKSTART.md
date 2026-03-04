@@ -83,13 +83,12 @@ curl -X POST http://localhost:3000/api/track \
 
 - Aktif otomatis saat `GITHUB_TOKEN` tersedia.
 - Mirror menyimpan status runtime penting ke file GitHub agar tidak split-state antar instance serverless.
-- Jika token tidak punya izin `contents:write`, mirror fallback otomatis ke issue comment.
+- Mirror mode dikunci ke `repo_file` agar konsisten.
 - Env terkait:
   - `AETHER_GITHUB_MIRROR_ENABLED`
   - `AETHER_GITHUB_MIRROR_MODE`
   - `AETHER_GITHUB_MIRROR_PATH`
   - `AETHER_GITHUB_MIRROR_MIN_WRITE_INTERVAL_SECONDS`
-  - `AETHER_GITHUB_MIRROR_ISSUE_NUMBER` / `AETHER_GITHUB_MIRROR_ISSUE_TITLE`
 
 ## Zero-click mode (recommended)
 
