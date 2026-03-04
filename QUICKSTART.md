@@ -92,12 +92,21 @@ curl -X POST http://localhost:3000/api/track \
 - Engine mencoba auto-submit langsung untuk target GitHub jika `GITHUB_TOKEN` tersedia.
 - Jika token tidak ada, hasil tetap diproses ke mode `outbox`.
 - Retry/backoff otomatis aktif dengan limit `CRYPTO_EXECUTOR_MAX_ATTEMPTS`.
+- Self-healing maintenance otomatis aktif:
+  - recovery task macet,
+  - reprioritas overdue queue,
+  - prune task lama + queue guard.
 - Pantau di dashboard tab `Admin` bagian `Crypto Revenue Engine`.
 
 ## Tambah sumber peluang (opsional)
 
 - `CRYPTO_GITHUB_QUERIES` untuk override query discovery.
 - `CRYPTO_RSS_FEED_URLS` untuk tambah sumber RSS (dipisah koma).
+- `CRYPTO_STALE_IN_PROGRESS_MINUTES` untuk batas recovery task macet.
+- `CRYPTO_QUEUE_OVERDUE_MINUTES` untuk batas reprioritas queue overdue.
+- `CRYPTO_TASK_RETENTION_DAYS` untuk retensi task selesai/skipped.
+- `CRYPTO_ACTIVE_TASK_LIMIT` untuk batas task aktif dalam antrean.
+- `CRYPTO_ENGINE_CYCLE_HISTORY_LIMIT` untuk panjang histori cycle di dashboard.
 
 Expect:
 

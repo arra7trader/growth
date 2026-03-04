@@ -144,6 +144,43 @@ interface AdminCryptoStatus {
     queries?: number;
     feedSources?: number;
   };
+  maintenance?: {
+    lastRunAt?: string | null;
+    recoveredInProgress?: number;
+    reprioritizedQueued?: number;
+    prunedTasks?: number;
+    autoSkippedOverflow?: number;
+    health?: 'healthy' | 'attention';
+    issues?: string[];
+    staleInProgressMinutes?: number;
+    overdueQueuedMinutes?: number;
+    retentionDays?: number;
+    activeTaskLimit?: number;
+  };
+  cycleHistory?: Array<{
+    at?: string | null;
+    total?: number;
+    newItems?: number;
+    actionItems?: number;
+    executedActions?: number;
+    submittedActions?: number;
+    preparedActions?: number;
+    failedActions?: number;
+    topScore?: number;
+    sources?: {
+      github?: number;
+      feed?: number;
+      total?: number;
+    };
+    maintenance?: {
+      recoveredInProgress?: number;
+      reprioritizedQueued?: number;
+      prunedTasks?: number;
+      autoSkippedOverflow?: number;
+      health?: 'healthy' | 'attention';
+    };
+  }>;
+  cycleHistoryLimit?: number;
 }
 
 interface AdminCryptoOpportunity {
@@ -803,6 +840,9 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
   const cryptoOpportunities = admin.cryptoOpportunities || [];
   const cryptoActionTasks = admin.cryptoActionTasks || [];
   const cryptoSubmissions = admin.cryptoSubmissions || [];
+  const cycleHistory = (cryptoStatus?.cycleHistory || []).slice(0, 12).reverse();
+  const maxCycleSubmitted = Math.max(1, ...cycleHistory.map((item) => safeNumber(item.submittedActions)));
+  const maxCycleExecuted = Math.max(1, ...cycleHistory.map((item) => safeNumber(item.executedActions)));
 
   return (
     <div className="space-y-6">
@@ -891,6 +931,80 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
             <div className="text-sm text-muted-foreground">
               Sources indexed: GitHub {safeNumber(cryptoStatus.sources?.github)} (from {safeNumber(cryptoStatus.sources?.queries)} queries)
               {' | '}RSS {safeNumber(cryptoStatus.sources?.feed)} (from {safeNumber(cryptoStatus.sources?.feedSources)} feeds)
+            </div>
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold">Self-Healing Maintenance</h3>
+                <span
+                  className={`px-2 py-0.5 rounded text-xs ${
+                    cryptoStatus.maintenance?.health === 'attention'
+                      ? 'bg-warning/20 text-warning'
+                      : 'bg-success/20 text-success'
+                  }`}
+                >
+                  {cryptoStatus.maintenance?.health || 'healthy'}
+                </span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  last run {formatRelativeTime(cryptoStatus.maintenance?.lastRunAt || null)}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                <InfoBox label="Recovered" value={String(safeNumber(cryptoStatus.maintenance?.recoveredInProgress))} />
+                <InfoBox label="Reprioritized" value={String(safeNumber(cryptoStatus.maintenance?.reprioritizedQueued))} />
+                <InfoBox label="Pruned" value={String(safeNumber(cryptoStatus.maintenance?.prunedTasks))} />
+                <InfoBox label="Queue Guard" value={String(safeNumber(cryptoStatus.maintenance?.autoSkippedOverflow))} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Guardrail: stale {safeNumber(cryptoStatus.maintenance?.staleInProgressMinutes)}m, overdue {safeNumber(cryptoStatus.maintenance?.overdueQueuedMinutes)}m, retention {safeNumber(cryptoStatus.maintenance?.retentionDays)}d, active limit {safeNumber(cryptoStatus.maintenance?.activeTaskLimit)} tasks.
+              </p>
+              {Array.isArray(cryptoStatus.maintenance?.issues) && cryptoStatus.maintenance?.issues.length > 0 && (
+                <div className="rounded-lg border border-warning/40 bg-warning/10 p-3">
+                  <p className="text-xs font-medium text-warning mb-1">Maintenance alerts</p>
+                  <ul className="text-xs text-warning space-y-1">
+                    {cryptoStatus.maintenance?.issues?.slice(0, 4).map((issue, index) => (
+                      <li key={`${issue}_${index}`}>- {String(issue)}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold">Cycle Growth Trend</h3>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {cycleHistory.length} / {safeNumber(cryptoStatus.cycleHistoryLimit || cycleHistory.length)} cycles shown
+                </span>
+              </div>
+              {cycleHistory.length === 0 && (
+                <p className="text-sm text-muted-foreground">Cycle history is not available yet. Engine will populate it automatically.</p>
+              )}
+              {cycleHistory.length > 0 && (
+                <div className="space-y-2">
+                  {cycleHistory.map((cycle, index) => {
+                    const submittedWidth = clamp((safeNumber(cycle.submittedActions) / maxCycleSubmitted) * 100, 4, 100);
+                    const executedWidth = clamp((safeNumber(cycle.executedActions) / maxCycleExecuted) * 100, 4, 100);
+                    return (
+                      <div key={`${cycle.at || index}`} className="rounded-lg border border-border/60 bg-background/60 p-2">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                          <span className="font-medium text-foreground">{formatRelativeTime(cycle.at || null)}</span>
+                          <span>new {safeNumber(cycle.newItems)}</span>
+                          <span>actions {safeNumber(cycle.actionItems)}</span>
+                          <span>submitted {safeNumber(cycle.submittedActions)}</span>
+                          {cycle.maintenance?.health === 'attention' && <span className="text-warning">maintenance attention</span>}
+                        </div>
+                        <div className="space-y-1">
+                          <div className="h-2 rounded bg-muted overflow-hidden">
+                            <div className="h-full bg-primary transition-all" style={{ width: `${executedWidth}%` }} />
+                          </div>
+                          <div className="h-2 rounded bg-muted overflow-hidden">
+                            <div className="h-full bg-success transition-all" style={{ width: `${submittedWidth}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             {cryptoStatus.lastError && (
               <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">

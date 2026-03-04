@@ -152,12 +152,25 @@ Sistem memantau transfer masuk USDT BEP20 ke wallet payout secara otomatis (tanp
   - Jika tidak: hasil disimpan sebagai `outbox` terstruktur (tetap otomatis, tanpa kehilangan draft).
 - Executor memakai retry + backoff otomatis, dengan batas attempt (`CRYPTO_EXECUTOR_MAX_ATTEMPTS`).
 - Semua task, draft, dan hasil submission ditampilkan di Admin panel untuk monitoring.
+- Engine menjalankan self-healing maintenance otomatis:
+  - recover task `in_progress` yang macet,
+  - reprioritize queue yang overdue,
+  - prune task lama, dan queue guard saat antrean terlalu padat.
+- Histori cycle disimpan otomatis dan divisualisasikan di Admin panel (`Cycle Growth Trend`).
 
 ## Source Enrichment
 
 - Engine memakai multi-query GitHub discovery (bounty/grant/quest/job).
 - Bisa ditambah sumber RSS crypto opportunity via `CRYPTO_RSS_FEED_URLS`.
 - Status jumlah sumber (query/feed) dan antrean executor tersedia di Admin panel.
+
+## Crypto Engine Tuning (opsional)
+
+- `CRYPTO_STALE_IN_PROGRESS_MINUTES`
+- `CRYPTO_QUEUE_OVERDUE_MINUTES`
+- `CRYPTO_TASK_RETENTION_DAYS`
+- `CRYPTO_ACTIVE_TASK_LIMIT`
+- `CRYPTO_ENGINE_CYCLE_HISTORY_LIMIT`
 
 ## Scripts
 
