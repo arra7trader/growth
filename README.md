@@ -119,6 +119,14 @@ Untuk data real (bukan simulasi). Event yang didukung:
 - `affiliate_sale`
 - `saas_sale`
 
+## Auto USDT BEP20 Monitoring
+
+Sistem memantau transfer masuk USDT BEP20 ke wallet payout secara otomatis (tanpa cron), lalu mencatatnya sebagai revenue real:
+
+- Wallet default: `0x84a06ffc26031b782c893252a769bd146bca8ad0`
+- Endpoint sinkronisasi dijalankan otomatis saat API status/evolve dipanggil
+- Status sinkronisasi dan error tampil di tab `Admin`
+
 ## Scripts
 
 - `npm run dev`

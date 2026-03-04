@@ -104,6 +104,22 @@ export async function initializeDatabase() {
       )
     `);
 
+    // Create on-chain receipts table for deduplication of wallet deposits
+    await tursoClient.execute(`
+      CREATE TABLE IF NOT EXISTS onchain_receipts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chain TEXT NOT NULL,
+        token_symbol TEXT NOT NULL,
+        tx_hash TEXT NOT NULL,
+        log_index INTEGER NOT NULL,
+        block_number INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        metadata TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(chain, tx_hash, log_index)
+      )
+    `);
+
     // Default operation mode: full free autonomous
     await tursoClient.execute({
       sql: `

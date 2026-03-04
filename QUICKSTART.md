@@ -68,6 +68,12 @@ curl -X POST http://localhost:3000/api/track \
   -d "{\"eventType\":\"page_view\",\"value\":1,\"source\":\"quickstart\"}"
 ```
 
+## USDT payout monitor
+
+- Wallet payout default BEP20 sudah di-set ke:
+  - `0x84a06ffc26031b782c893252a769bd146bca8ad0`
+- Cek sinkronisasi on-chain di dashboard tab `Admin` bagian `USDT Payout Monitor`.
+
 Expect:
 
 - `success: true`

@@ -96,6 +96,17 @@ interface AdminPilotReport {
   } | null;
 }
 
+interface AdminPayoutStatus {
+  walletAddress: string;
+  network: string;
+  tokenSymbol: string;
+  tokenContract: string;
+  configured: boolean;
+  lastSyncedAt: string | null;
+  lastScannedBlock: number | null;
+  lastError: string | null;
+}
+
 interface SystemStatus {
   lastActivity: string | null;
   recentLogs: Log[];
@@ -120,6 +131,7 @@ interface SystemStatus {
   admin?: {
     pilotStatus: AdminPilotStatus;
     pilotReports: AdminPilotReport[];
+    payoutStatus?: AdminPayoutStatus;
   };
 }
 
@@ -649,6 +661,7 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
 
   const { pilotStatus, pilotReports } = admin;
   const isPilotRunning = Boolean(pilotStatus.runner?.running);
+  const payoutStatus = admin.payoutStatus;
 
   return (
     <div className="space-y-6">
@@ -665,6 +678,31 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
           {' | '}
           Last heartbeat: {formatRelativeTime(pilotStatus.lastHeartbeatAt)}
         </div>
+      </div>
+
+      <div className="bg-card/70 rounded-xl border border-border p-6">
+        <h2 className="text-lg font-semibold mb-4">USDT Payout Monitor</h2>
+        {!payoutStatus && <p className="text-sm text-muted-foreground">Payout monitor not available yet.</p>}
+        {payoutStatus && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <InfoBox label="Network" value={payoutStatus.network || 'n/a'} accent="primary" />
+              <InfoBox label="Token" value={payoutStatus.tokenSymbol || 'n/a'} />
+              <InfoBox label="Sync Status" value={payoutStatus.configured ? 'configured' : 'not configured'} />
+              <InfoBox label="Last Synced" value={formatRelativeTime(payoutStatus.lastSyncedAt)} />
+            </div>
+            <div className="text-sm text-muted-foreground break-all">
+              Wallet: <span className="text-foreground">{payoutStatus.walletAddress || 'n/a'}</span>
+              {' | '}Contract: <span className="text-foreground">{payoutStatus.tokenContract || 'n/a'}</span>
+              {' | '}Last block: <span className="text-foreground">{payoutStatus.lastScannedBlock ?? 'n/a'}</span>
+            </div>
+            {payoutStatus.lastError && (
+              <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+                On-chain sync issue: {payoutStatus.lastError}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="bg-card/70 rounded-xl border border-border p-6">

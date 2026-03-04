@@ -2,17 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { runEvolutionCycle } from '@/lib/brain';
 import tursoClient, { initializeDatabase } from '@/lib/db';
 import { getMonetizationDashboard, initializeAffiliateLinks } from '@/lib/monetization';
+import { getOnchainWalletConfig, syncOnchainUsdtPayments } from '@/lib/onchain';
 
 type OperationMode = 'free_manual' | 'free_autonomous';
 
 let bootstrapPromise: Promise<void> | null = null;
 let autonomousEvolutionPromise: Promise<void> | null = null;
 let pilotEnsurePromise: Promise<void> | null = null;
+let onchainSyncPromise: Promise<void> | null = null;
+let onchainLastSyncMs = 0;
 
 const SYSTEM_MODE = 'free_real';
 const DEFAULT_OPERATION_MODE: OperationMode = 'free_autonomous';
 const DEFAULT_AUTO_INTERVAL_MINUTES = 180;
 const ADMIN_REPORT_LIMIT = 20;
+const ONCHAIN_SYNC_INTERVAL_MS = 90 * 1000;
 
 async function ensureSystemInitialized() {
   if (!bootstrapPromise) {
@@ -28,6 +32,7 @@ async function ensureSystemInitialized() {
 
   await bootstrapPromise;
   await ensurePilotAlwaysOn();
+  await maybeSyncOnchainPayments();
 }
 
 function safeDateToISO(value: unknown): string | null {
@@ -63,6 +68,30 @@ async function setSetting(key: string, value: string): Promise<void> {
     `,
     args: [key, value],
   });
+}
+
+async function maybeSyncOnchainPayments() {
+  if (onchainSyncPromise) {
+    await onchainSyncPromise;
+    return;
+  }
+
+  const now = Date.now();
+  if (now - onchainLastSyncMs < ONCHAIN_SYNC_INTERVAL_MS) {
+    return;
+  }
+
+  onchainSyncPromise = (async () => {
+    const result = await syncOnchainUsdtPayments();
+    onchainLastSyncMs = Date.now();
+    if (!result.synced && result.error) {
+      console.error('On-chain sync failed:', result.error);
+    }
+  })().finally(() => {
+    onchainSyncPromise = null;
+  });
+
+  await onchainSyncPromise;
 }
 
 async function getPilotRunnerState() {
@@ -195,6 +224,26 @@ async function getPilotStatus() {
   };
 }
 
+async function getPayoutStatus() {
+  const wallet = getOnchainWalletConfig();
+  const [lastSyncedAt, lastScannedBlock, lastError] = await Promise.all([
+    getSetting('onchain_last_synced_at'),
+    getSetting('onchain_last_scanned_block'),
+    getSetting('onchain_last_error'),
+  ]);
+
+  return {
+    walletAddress: wallet.address,
+    network: wallet.network,
+    tokenSymbol: wallet.tokenSymbol,
+    tokenContract: wallet.tokenContract,
+    configured: wallet.configured,
+    lastSyncedAt: safeDateToISO(lastSyncedAt),
+    lastScannedBlock: Number(lastScannedBlock || 0) || null,
+    lastError: lastError || null,
+  };
+}
+
 async function getRevenueTrend() {
   const result = await tursoClient.execute({
     sql: `
@@ -274,6 +323,7 @@ async function getSystemStatus() {
       intervalValue,
       pilotStatus,
       pilotReports,
+      payoutStatus,
     ] =
       await Promise.all([
         tursoClient.execute({
@@ -297,6 +347,7 @@ async function getSystemStatus() {
         getSetting('auto_interval_minutes'),
         getPilotStatus(),
         getPilotReports(),
+        getPayoutStatus(),
       ]);
 
     const operationMode = DEFAULT_OPERATION_MODE;
@@ -327,6 +378,7 @@ async function getSystemStatus() {
       admin: {
         pilotStatus,
         pilotReports,
+        payoutStatus,
       },
     };
   } catch (error) {
