@@ -14,6 +14,8 @@ const DEFAULT_CYCLE_HISTORY_LIMIT = 36;
 const DEFAULT_SUBMISSION_MONITOR_INTERVAL_MINUTES = 20;
 const DEFAULT_SUBMISSION_MONITOR_LIMIT = 24;
 
+let runtimeOpportunityCache: CryptoOpportunity[] = [];
+
 const DEFAULT_GITHUB_QUERIES = [
   'web3 bounty is:issue in:title,body state:open',
   'crypto grant is:issue in:title,body state:open',
@@ -2116,7 +2118,17 @@ async function collectCryptoOpportunities(): Promise<{
     if (stored.length > 0) {
       usedStoredFallback = true;
       limited = stored;
+    } else if (runtimeOpportunityCache.length > 0) {
+      usedStoredFallback = true;
+      limited = runtimeOpportunityCache.slice(0, DEFAULT_STORE_LIMIT);
     }
+  }
+
+  if (
+    limited.length > 0 &&
+    !(queryFailures >= Math.max(1, queries.length) && feedFailures >= Math.max(1, feedUrls.length))
+  ) {
+    runtimeOpportunityCache = limited.slice(0, DEFAULT_STORE_LIMIT);
   }
 
   return {
