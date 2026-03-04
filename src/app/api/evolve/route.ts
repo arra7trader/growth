@@ -36,7 +36,6 @@ async function ensureSystemInitialized() {
   await bootstrapPromise;
   await ensurePilotAlwaysOn();
   await maybeSyncOnchainPayments();
-  await maybeTriggerCryptoEngine();
 }
 
 function safeDateToISO(value: unknown): string | null {
@@ -150,8 +149,11 @@ function shouldRunByInterval(lastRunAt: string | null, intervalMinutes: number):
   return Date.now() - last >= intervalMinutes * 60 * 1000;
 }
 
-async function maybeTriggerCryptoEngine() {
+async function maybeTriggerCryptoEngine(waitForCompletion = false) {
   if (cryptoEnginePromise) {
+    if (waitForCompletion) {
+      await cryptoEnginePromise;
+    }
     return false;
   }
 
@@ -170,10 +172,18 @@ async function maybeTriggerCryptoEngine() {
   }
 
   cryptoEnginePromise = (async () => {
-    await runCryptoRevenueCycle();
+    try {
+      await runCryptoRevenueCycle();
+    } catch (error) {
+      console.error('Crypto engine cycle failed:', error);
+    }
   })().finally(() => {
     cryptoEnginePromise = null;
   });
+
+  if (waitForCompletion) {
+    await cryptoEnginePromise;
+  }
 
   return true;
 }
@@ -352,6 +362,7 @@ async function getAutopilotStatus() {
 }
 
 async function runAutonomousCheck() {
+  const cryptoTriggered = await maybeTriggerCryptoEngine(true);
   const [intervalValue, evolutionResult] = await Promise.all([
     getSetting('auto_interval_minutes'),
     tursoClient.execute({
@@ -364,7 +375,6 @@ async function runAutonomousCheck() {
   const autoIntervalMinutes = Number(intervalValue || DEFAULT_AUTO_INTERVAL_MINUTES) || DEFAULT_AUTO_INTERVAL_MINUTES;
   const lastEvolutionAt = safeDateToISO(evolutionResult.rows[0]?.created_at);
   const autoEvolutionTriggered = maybeTriggerAutonomousEvolution(operationMode, autoIntervalMinutes, lastEvolutionAt);
-  const cryptoTriggered = await maybeTriggerCryptoEngine();
   const nextAutoEvolutionAt = lastEvolutionAt
     ? new Date(new Date(lastEvolutionAt).getTime() + autoIntervalMinutes * 60 * 1000).toISOString()
     : new Date(Date.now() + autoIntervalMinutes * 60 * 1000).toISOString();
@@ -448,6 +458,7 @@ function maybeTriggerAutonomousEvolution(
 
 async function getSystemStatus() {
   try {
+    const cryptoTriggered = await maybeTriggerCryptoEngine(true);
     const [
       logsResult,
       metricsResult,
@@ -499,7 +510,6 @@ async function getSystemStatus() {
     const autoIntervalMinutes = Number(intervalValue || DEFAULT_AUTO_INTERVAL_MINUTES) || DEFAULT_AUTO_INTERVAL_MINUTES;
     const lastEvolutionAt = safeDateToISO(evolutionResult.rows[0]?.created_at);
     const autoEvolutionTriggered = maybeTriggerAutonomousEvolution(operationMode, autoIntervalMinutes, lastEvolutionAt);
-    const cryptoTriggered = await maybeTriggerCryptoEngine();
     const nextAutoEvolutionAt = lastEvolutionAt
       ? new Date(new Date(lastEvolutionAt).getTime() + autoIntervalMinutes * 60 * 1000).toISOString()
       : new Date(Date.now() + autoIntervalMinutes * 60 * 1000).toISOString();
