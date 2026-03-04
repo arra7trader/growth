@@ -1,12 +1,20 @@
 import tursoClient from './db';
 
 const DEFAULT_BSC_RPC_URL = 'https://bsc-dataseed.binance.org';
+const DEFAULT_BSC_RPC_URLS = [
+  'https://bsc-dataseed.binance.org',
+  'https://bsc-rpc.publicnode.com',
+  'https://rpc.ankr.com/bsc',
+];
 const DEFAULT_USDT_BSC_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
 const DEFAULT_PAYOUT_WALLET = '0x84a06ffc26031b782c893252a769bd146bca8ad0';
 const DEFAULT_NETWORK = 'BEP20';
 const DEFAULT_TOKEN_SYMBOL = 'USDT';
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const TOKEN_DECIMALS = 18;
+const DEFAULT_MIN_SYNC_INTERVAL_SECONDS = 120;
+const DEFAULT_MAX_BLOCKS_PER_SYNC = 120;
+const DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS = 300;
 
 interface RpcResponse<T> {
   result?: T;
@@ -21,6 +29,29 @@ interface EvmLog {
   blockNumber: string;
   logIndex: string;
   data: string;
+}
+
+function getRpcUrls(): string[] {
+  const configuredList = String(process.env.BSC_RPC_URLS || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (configuredList.length > 0) {
+    return configuredList;
+  }
+
+  const single = String(process.env.BSC_RPC_URL || '').trim();
+  if (single) {
+    return [single];
+  }
+
+  return DEFAULT_BSC_RPC_URLS;
+}
+
+function isRateLimitError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes('limit exceeded') || normalized.includes('rate limit') || normalized.includes('http 429');
 }
 
 function isEvmAddress(value: string): boolean {
@@ -57,35 +88,46 @@ function bigIntToTokenAmount(raw: bigint, decimals: number): number {
 }
 
 async function rpcCall<T>(method: string, params: unknown[]): Promise<T> {
-  const rpcUrl = process.env.BSC_RPC_URL || DEFAULT_BSC_RPC_URL;
-  const response = await fetch(rpcUrl, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: Date.now(),
-      method,
-      params,
-    }),
-    cache: 'no-store',
-  });
+  const urls = getRpcUrls();
+  let lastError = 'Unknown BSC RPC error';
 
-  if (!response.ok) {
-    throw new Error(`BSC RPC HTTP ${response.status}`);
+  for (const rpcUrl of urls) {
+    try {
+      const response = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method,
+          params,
+        }),
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error(`BSC RPC HTTP ${response.status}`);
+      }
+
+      const payload = (await response.json()) as RpcResponse<T>;
+      if (payload.error) {
+        throw new Error(`BSC RPC error ${payload.error.code}: ${payload.error.message}`);
+      }
+
+      if (payload.result === undefined) {
+        throw new Error(`BSC RPC returned empty result for ${method}`);
+      }
+
+      return payload.result;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      lastError = `${message} [rpc=${rpcUrl}]`;
+    }
   }
 
-  const payload = (await response.json()) as RpcResponse<T>;
-  if (payload.error) {
-    throw new Error(`BSC RPC error ${payload.error.code}: ${payload.error.message}`);
-  }
-
-  if (payload.result === undefined) {
-    throw new Error(`BSC RPC returned empty result for ${method}`);
-  }
-
-  return payload.result;
+  throw new Error(lastError);
 }
 
 async function getSetting(key: string): Promise<string | null> {
@@ -164,11 +206,47 @@ export async function syncOnchainUsdtPayments(): Promise<{
   }
 
   try {
+    const now = Date.now();
+    const minSyncIntervalSeconds = Number(process.env.ONCHAIN_MIN_SYNC_INTERVAL_SECONDS || DEFAULT_MIN_SYNC_INTERVAL_SECONDS);
+    const maxBlocksPerSync = Math.max(20, Number(process.env.ONCHAIN_MAX_BLOCKS_PER_SYNC || DEFAULT_MAX_BLOCKS_PER_SYNC));
+    const cooldownSeconds = Number(process.env.ONCHAIN_RATE_LIMIT_COOLDOWN_SECONDS || DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS);
+
+    const [lastSyncedAtValue, rateLimitUntilValue] = await Promise.all([
+      getSetting('onchain_last_synced_at'),
+      getSetting('onchain_rate_limited_until_unix'),
+    ]);
+
+    const rateLimitUntil = Number(rateLimitUntilValue || 0);
+    if (rateLimitUntil > now) {
+      const retryAfter = Math.max(1, Math.ceil((rateLimitUntil - now) / 1000));
+      return {
+        synced: false,
+        newTransfers: 0,
+        amount: 0,
+        fromBlock: null,
+        toBlock: null,
+        error: `RPC cooldown active, retry in ${retryAfter}s`,
+      };
+    }
+
+    if (lastSyncedAtValue) {
+      const lastSyncedMs = new Date(lastSyncedAtValue).getTime();
+      if (Number.isFinite(lastSyncedMs) && now - lastSyncedMs < minSyncIntervalSeconds * 1000) {
+        return {
+          synced: true,
+          newTransfers: 0,
+          amount: 0,
+          fromBlock: null,
+          toBlock: null,
+        };
+      }
+    }
+
     const latestBlockHex = await rpcCall<string>('eth_blockNumber', []);
     const latestBlock = hexToNumber(latestBlockHex);
     const lastScannedBlock = Number(await getSetting('onchain_last_scanned_block')) || 0;
-    const fromBlock = lastScannedBlock > 0 ? lastScannedBlock + 1 : Math.max(1, latestBlock - 2000);
-    const toBlock = latestBlock;
+    const fromBlock = lastScannedBlock > 0 ? lastScannedBlock + 1 : Math.max(1, latestBlock - maxBlocksPerSync);
+    const toBlock = Math.min(latestBlock, fromBlock + maxBlocksPerSync - 1);
 
     if (fromBlock > toBlock) {
       await setSetting('onchain_last_synced_at', new Date().toISOString());
@@ -254,6 +332,7 @@ export async function syncOnchainUsdtPayments(): Promise<{
     await Promise.all([
       setSetting('onchain_last_scanned_block', String(toBlock)),
       setSetting('onchain_last_synced_at', new Date().toISOString()),
+      setSetting('onchain_rate_limited_until_unix', '0'),
       setSetting('onchain_last_error', ''),
     ]);
 
@@ -283,7 +362,17 @@ export async function syncOnchainUsdtPayments(): Promise<{
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    await setSetting('onchain_last_error', message);
+    if (isRateLimitError(message)) {
+      const cooldownSeconds = Number(process.env.ONCHAIN_RATE_LIMIT_COOLDOWN_SECONDS || DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS);
+      const retryAt = Date.now() + cooldownSeconds * 1000;
+      await Promise.all([
+        setSetting('onchain_rate_limited_until_unix', String(retryAt)),
+        setSetting('onchain_last_error', `RPC rate-limited. Cooling down for ${cooldownSeconds}s.`),
+      ]);
+    } else {
+      await setSetting('onchain_last_error', message);
+    }
+
     return {
       synced: false,
       newTransfers: 0,
