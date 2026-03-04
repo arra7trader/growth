@@ -3,7 +3,7 @@ import { runEvolutionCycle } from '@/lib/brain';
 import tursoClient, { initializeDatabase } from '@/lib/db';
 import { getMonetizationDashboard } from '@/lib/monetization';
 import { getOnchainWalletConfig, syncOnchainUsdtPayments } from '@/lib/onchain';
-import { getCryptoActionTasks, getCryptoEngineStatus, getCryptoOpportunities, runCryptoRevenueCycle } from '@/lib/crypto-engine';
+import { getCryptoActionTasks, getCryptoEngineStatus, getCryptoOpportunities, getCryptoSubmissions, runCryptoRevenueCycle } from '@/lib/crypto-engine';
 
 type OperationMode = 'free_manual' | 'free_autonomous';
 
@@ -463,6 +463,7 @@ async function getSystemStatus() {
       cryptoStatus,
       cryptoOpportunities,
       cryptoActionTasks,
+      cryptoSubmissions,
     ] =
       await Promise.all([
         tursoClient.execute({
@@ -491,6 +492,7 @@ async function getSystemStatus() {
         getCryptoEngineStatus(),
         getCryptoOpportunities(12),
         getCryptoActionTasks(12),
+        getCryptoSubmissions(12),
       ]);
 
     const operationMode = DEFAULT_OPERATION_MODE;
@@ -527,6 +529,7 @@ async function getSystemStatus() {
         cryptoStatus,
         cryptoOpportunities,
         cryptoActionTasks,
+        cryptoSubmissions,
       },
       cryptoTriggered,
     };
@@ -580,13 +583,14 @@ export async function POST(request: NextRequest) {
       await maybeLogAutopilotActivity(source);
 
       const autonomous = await runAutonomousCheck();
-      const [pilotStatus, payoutStatus, autopilotStatus, cryptoStatus, cryptoOpportunities, cryptoActionTasks] = await Promise.all([
+      const [pilotStatus, payoutStatus, autopilotStatus, cryptoStatus, cryptoOpportunities, cryptoActionTasks, cryptoSubmissions] = await Promise.all([
         getPilotStatus(),
         getPayoutStatus(),
         getAutopilotStatus(),
         getCryptoEngineStatus(),
         getCryptoOpportunities(8),
         getCryptoActionTasks(8),
+        getCryptoSubmissions(8),
       ]);
 
       return NextResponse.json({
@@ -600,6 +604,7 @@ export async function POST(request: NextRequest) {
             cryptoStatus,
             cryptoOpportunities,
             cryptoActionTasks,
+            cryptoSubmissions,
           },
         },
       });

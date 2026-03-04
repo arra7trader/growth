@@ -123,6 +123,14 @@ interface AdminCryptoStatus {
   lastTotal: number;
   lastNew: number;
   lastActions?: number;
+  executor?: {
+    lastRunAt?: string | null;
+    lastProcessed?: number;
+    lastSubmitted?: number;
+    lastPrepared?: number;
+    lastFailed?: number;
+    lastError?: string | null;
+  };
 }
 
 interface AdminCryptoOpportunity {
@@ -157,6 +165,19 @@ interface AdminCryptoActionTask {
   updatedAt?: string | null;
 }
 
+interface AdminCryptoSubmission {
+  key: string;
+  taskKey?: string;
+  opportunityKey?: string;
+  channel?: string;
+  state?: string;
+  externalUrl?: string | null;
+  message?: string;
+  error?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
 interface SystemStatus {
   lastActivity: string | null;
   recentLogs: Log[];
@@ -187,6 +208,7 @@ interface SystemStatus {
     cryptoStatus?: AdminCryptoStatus;
     cryptoOpportunities?: AdminCryptoOpportunity[];
     cryptoActionTasks?: AdminCryptoActionTask[];
+    cryptoSubmissions?: AdminCryptoSubmission[];
   };
 }
 
@@ -762,6 +784,7 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
   const cryptoStatus = admin.cryptoStatus;
   const cryptoOpportunities = admin.cryptoOpportunities || [];
   const cryptoActionTasks = admin.cryptoActionTasks || [];
+  const cryptoSubmissions = admin.cryptoSubmissions || [];
 
   return (
     <div className="space-y-6">
@@ -837,9 +860,20 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
             <div className="text-sm text-muted-foreground">
               Auto actions generated last cycle: <span className="text-foreground">{safeNumber(cryptoStatus.lastActions)}</span>
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <InfoBox label="Executor Last Run" value={formatRelativeTime(cryptoStatus.executor?.lastRunAt || null)} />
+              <InfoBox label="Processed" value={String(safeNumber(cryptoStatus.executor?.lastProcessed))} />
+              <InfoBox label="Submitted / Prepared" value={`${safeNumber(cryptoStatus.executor?.lastSubmitted)} / ${safeNumber(cryptoStatus.executor?.lastPrepared)}`} />
+              <InfoBox label="Failed" value={String(safeNumber(cryptoStatus.executor?.lastFailed))} accent={safeNumber(cryptoStatus.executor?.lastFailed) > 0 ? 'destructive' : undefined} />
+            </div>
             {cryptoStatus.lastError && (
               <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
                 Crypto engine issue: {cryptoStatus.lastError}
+              </div>
+            )}
+            {cryptoStatus.executor?.lastError && (
+              <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+                Executor issue: {cryptoStatus.executor.lastError}
               </div>
             )}
             <div className="space-y-2">
@@ -911,6 +945,44 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
                         className="text-xs text-primary hover:underline mt-2 inline-block break-all"
                       >
                         {String(task.targetUrl)}
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <h3 className="text-sm font-semibold mb-2">Submission Results</h3>
+              <div className="space-y-2">
+                {cryptoSubmissions.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No submission records yet.</p>
+                )}
+                {cryptoSubmissions.slice(0, 6).map((submission) => (
+                  <div key={String(submission.key)} className="rounded-lg border border-border/70 p-3">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span className="px-2 py-0.5 rounded text-xs bg-primary/20 text-primary">
+                        {String(submission.channel || 'unknown')}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-xs bg-success/20 text-success">
+                        {String(submission.state || 'unknown')}
+                      </span>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {formatRelativeTime(submission.createdAt || submission.updatedAt || null)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{String(submission.message || 'no message')}</p>
+                    {submission.error && (
+                      <p className="text-xs text-warning mt-1">{String(submission.error)}</p>
+                    )}
+                    {submission.externalUrl && (
+                      <a
+                        href={String(submission.externalUrl)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary hover:underline mt-1 inline-block break-all"
+                      >
+                        {String(submission.externalUrl)}
                       </a>
                     )}
                   </div>

@@ -146,7 +146,10 @@ Sistem memantau transfer masuk USDT BEP20 ke wallet payout secara otomatis (tanp
 
 - Setiap cycle, engine memilih peluang crypto skor tertinggi.
 - Sistem membuat `crypto_action_task` otomatis (priority, due time, runbook, submission draft).
-- Semua task dan draft ditampilkan di Admin panel untuk monitoring.
+- Sistem menjalankan auto-submit adapter:
+  - Jika target adalah GitHub issue/pull URL dan `GITHUB_TOKEN` tersedia: submit komentar otomatis.
+  - Jika tidak: hasil disimpan sebagai `outbox` terstruktur (tetap otomatis, tanpa kehilangan draft).
+- Semua task, draft, dan hasil submission ditampilkan di Admin panel untuk monitoring.
 
 ## Scripts
 
