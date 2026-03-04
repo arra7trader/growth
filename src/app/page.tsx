@@ -138,6 +138,12 @@ interface AdminCryptoStatus {
       skipped?: number;
     };
   };
+  sources?: {
+    github?: number;
+    feed?: number;
+    queries?: number;
+    feedSources?: number;
+  };
 }
 
 interface AdminCryptoOpportunity {
@@ -168,6 +174,11 @@ interface AdminCryptoActionTask {
     objective?: string;
     steps?: string[];
     submissionDraft?: string;
+  };
+  execution?: {
+    attempts?: number;
+    nextAttemptAt?: string | null;
+    lastError?: string | null;
   };
   updatedAt?: string | null;
 }
@@ -877,6 +888,10 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
               Max attempts per task: <span className="text-foreground">{safeNumber(cryptoStatus.executor?.maxAttempts)}</span>
               {' | '}Queue: queued {safeNumber(cryptoStatus.executor?.queue?.queued)}, in-progress {safeNumber(cryptoStatus.executor?.queue?.inProgress)}, completed {safeNumber(cryptoStatus.executor?.queue?.completed)}, skipped {safeNumber(cryptoStatus.executor?.queue?.skipped)}
             </div>
+            <div className="text-sm text-muted-foreground">
+              Sources indexed: GitHub {safeNumber(cryptoStatus.sources?.github)} (from {safeNumber(cryptoStatus.sources?.queries)} queries)
+              {' | '}RSS {safeNumber(cryptoStatus.sources?.feed)} (from {safeNumber(cryptoStatus.sources?.feedSources)} feeds)
+            </div>
             {cryptoStatus.lastError && (
               <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
                 Crypto engine issue: {cryptoStatus.lastError}
@@ -945,6 +960,12 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
                     <p className="text-xs text-muted-foreground mt-1">
                       Objective: {String(task.runbook?.objective || 'n/a')}
                     </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Attempts: {safeNumber(task.execution?.attempts)} | Next try: {formatRelativeTime(task.execution?.nextAttemptAt || null)}
+                    </p>
+                    {task.execution?.lastError && (
+                      <p className="text-xs text-warning mt-1">{String(task.execution.lastError)}</p>
+                    )}
                     <pre className="mt-2 text-xs text-muted-foreground bg-muted/40 p-2 rounded overflow-auto max-h-28">
                       {String(task.runbook?.submissionDraft || 'No draft yet')}
                     </pre>

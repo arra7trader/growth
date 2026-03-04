@@ -4,8 +4,23 @@ import tursoClient from './db';
 const DEFAULT_ENGINE_INTERVAL_MINUTES = 30;
 const DEFAULT_MAX_ITEMS_PER_QUERY = 20;
 const DEFAULT_STORE_LIMIT = 40;
-const DEFAULT_EXECUTOR_LIMIT_PER_CYCLE = 5;
+const DEFAULT_EXECUTOR_LIMIT_PER_CYCLE = 8;
 const DEFAULT_EXECUTOR_MAX_ATTEMPTS = 3;
+
+const DEFAULT_GITHUB_QUERIES = [
+  'web3 bounty in:title,body state:open',
+  'crypto grant in:title,body state:open',
+  'solidity bug bounty in:title,body state:open',
+  'blockchain quest reward in:title,body state:open',
+  'remote web3 job in:title,body state:open',
+  'defi bug bounty in:title,body state:open',
+  'evm security bounty in:title,body state:open',
+  'dao grant in:title,body state:open',
+  'zk grant in:title,body state:open',
+  'smart contract audit bounty in:title,body state:open',
+  'ecosystem grant in:title,body state:open',
+  'community quest web3 in:title,body state:open',
+];
 
 interface GithubIssue {
   html_url: string;
@@ -20,6 +35,14 @@ interface GithubIssue {
 
 interface GithubSearchResponse {
   items?: GithubIssue[];
+}
+
+interface FeedOpportunityRaw {
+  title: string;
+  link: string;
+  summary: string;
+  publishedAt: string;
+  source: string;
 }
 
 export interface CryptoOpportunity {
@@ -60,7 +83,7 @@ export interface CryptoActionTask {
     lastError: string | null;
   };
   submission?: {
-    channel: 'github_issue_comment' | 'outbox';
+    channel: 'github_issue_comment' | 'webhook' | 'outbox';
     state: 'submitted' | 'prepared' | 'failed' | 'skipped';
     externalUrl: string | null;
     submissionKey: string;
@@ -71,7 +94,7 @@ export interface CryptoActionTask {
 
 interface SubmissionOutcome {
   state: 'submitted' | 'prepared' | 'failed' | 'skipped';
-  channel: 'github_issue_comment' | 'outbox';
+  channel: 'github_issue_comment' | 'webhook' | 'outbox';
   externalUrl: string | null;
   submissionKey: string;
   message: string;
@@ -85,6 +108,55 @@ function safeNumber(value: unknown, fallback = 0): number {
 
 function compactText(value: string, max = 220): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function extractTagValue(block: string, tag: string): string {
+  const direct = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+  if (direct?.[1]) {
+    return decodeXmlEntities(direct[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim());
+  }
+
+  const atom = block.match(new RegExp(`<${tag}[^>]*\\s+href="([^"]+)"[^>]*/>`, 'i'));
+  if (atom?.[1]) {
+    return decodeXmlEntities(atom[1].trim());
+  }
+
+  return '';
+}
+
+function getFeedUrls(): string[] {
+  const raw = String(process.env.CRYPTO_RSS_FEED_URLS || '').trim();
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => /^https?:\/\//i.test(item));
+}
+
+function getGithubQueries(): string[] {
+  const raw = String(process.env.CRYPTO_GITHUB_QUERIES || '').trim();
+  if (!raw) {
+    return DEFAULT_GITHUB_QUERIES;
+  }
+
+  const list = raw
+    .split('||')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return list.length > 0 ? list : DEFAULT_GITHUB_QUERIES;
 }
 
 function keyFromUrl(url: string): string {
@@ -236,6 +308,91 @@ async function fetchGithubIssues(query: string): Promise<GithubIssue[]> {
 
   const data = (await response.json()) as GithubSearchResponse;
   return Array.isArray(data.items) ? data.items : [];
+}
+
+async function fetchFeedItems(feedUrl: string): Promise<FeedOpportunityRaw[]> {
+  const response = await fetch(feedUrl, {
+    headers: {
+      'User-Agent': 'aether-auto-saas-crypto-engine',
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Feed HTTP ${response.status} for ${feedUrl}`);
+  }
+
+  const xml = await response.text();
+  const blocks = [
+    ...Array.from(xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)).map((match) => match[0]),
+    ...Array.from(xml.matchAll(/<entry\b[\s\S]*?<\/entry>/gi)).map((match) => match[0]),
+  ];
+
+  const origin = (() => {
+    try {
+      return new URL(feedUrl).hostname;
+    } catch {
+      return 'feed';
+    }
+  })();
+
+  return blocks
+    .map((block) => {
+      const title = extractTagValue(block, 'title');
+      const link = extractTagValue(block, 'link');
+      const summary =
+        extractTagValue(block, 'description') ||
+        extractTagValue(block, 'summary') ||
+        extractTagValue(block, 'content');
+      const publishedAt =
+        extractTagValue(block, 'pubDate') ||
+        extractTagValue(block, 'updated') ||
+        extractTagValue(block, 'published') ||
+        new Date().toISOString();
+
+      return {
+        title,
+        link,
+        summary,
+        publishedAt,
+        source: origin,
+      };
+    })
+    .filter((item) => item.title && item.link);
+}
+
+function feedItemToOpportunity(item: FeedOpportunityRaw): CryptoOpportunity | null {
+  if (!item.link || !item.title) {
+    return null;
+  }
+
+  const combined = `${item.title}\n${item.summary}`;
+  const rewardEstimateUsd = parseRewardEstimateUsd(combined);
+  const category = opportunityCategoryFromText(combined);
+  const score = estimateOpportunityScore({
+    rewardEstimateUsd,
+    updatedAt: item.publishedAt || new Date().toISOString(),
+    category,
+    text: combined,
+  });
+
+  return {
+    key: keyFromUrl(item.link),
+    source: `feed:${item.source}`,
+    category,
+    title: compactText(item.title, 180),
+    url: item.link,
+    summary: compactText(item.summary || item.title, 240),
+    tags: [],
+    rewardEstimateUsd,
+    score,
+    updatedAt: item.publishedAt || new Date().toISOString(),
+    metadata: {
+      author: null,
+      repositoryUrl: null,
+      deadlineAt: parseDeadlineFromText(combined),
+    },
+  };
 }
 
 function issueToOpportunity(issue: GithubIssue): CryptoOpportunity | null {
@@ -669,6 +826,84 @@ async function submitToGithubIssueComment(task: CryptoActionTask): Promise<Submi
   }
 }
 
+async function submitToWebhook(task: CryptoActionTask): Promise<SubmissionOutcome | null> {
+  const webhookUrl = String(process.env.AETHER_SUBMISSION_WEBHOOK_URL || '').trim();
+  if (!webhookUrl) {
+    return null;
+  }
+
+  const submissionKey = `submission_${task.key}_${Date.now()}`;
+  const payload = {
+    submissionKey,
+    task,
+    generatedAt: new Date().toISOString(),
+    mode: 'autonomous',
+  };
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      return {
+        state: 'failed',
+        channel: 'webhook',
+        externalUrl: null,
+        submissionKey,
+        message: `Webhook submission failed (${response.status})`,
+        error: text.slice(0, 400),
+      };
+    }
+
+    return {
+      state: 'submitted',
+      channel: 'webhook',
+      externalUrl: webhookUrl,
+      submissionKey,
+      message: 'Submission sent to webhook endpoint.',
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      state: 'failed',
+      channel: 'webhook',
+      externalUrl: null,
+      submissionKey,
+      message: 'Webhook submission request failed.',
+      error: message,
+    };
+  }
+}
+
+async function runSubmissionAdapter(task: CryptoActionTask): Promise<SubmissionOutcome> {
+  const webhookOutcome = await submitToWebhook(task);
+  if (webhookOutcome?.state === 'submitted') {
+    return webhookOutcome;
+  }
+
+  const githubOutcome = await submitToGithubIssueComment(task);
+  if (githubOutcome.state === 'submitted' || githubOutcome.state === 'prepared') {
+    return githubOutcome;
+  }
+
+  if (webhookOutcome?.state === 'failed') {
+    return {
+      ...webhookOutcome,
+      message: `${webhookOutcome.message} | ${githubOutcome.message}`,
+      error: [webhookOutcome.error, githubOutcome.error].filter(Boolean).join(' | ') || webhookOutcome.error,
+    };
+  }
+
+  return githubOutcome;
+}
+
 async function loadExecutableActionTasks(limit: number): Promise<CryptoActionTask[]> {
   const maxAttempts = Number(process.env.CRYPTO_EXECUTOR_MAX_ATTEMPTS || DEFAULT_EXECUTOR_MAX_ATTEMPTS) || DEFAULT_EXECUTOR_MAX_ATTEMPTS;
   const now = Date.now();
@@ -766,7 +1001,7 @@ async function executeActionTask(task: CryptoActionTask): Promise<SubmissionOutc
   };
   await persistActionTask(processing);
 
-  const outcome = await submitToGithubIssueComment(processing);
+  const outcome = await runSubmissionAdapter(processing);
 
   const finished: CryptoActionTask = {
     ...processing,
@@ -871,14 +1106,18 @@ async function runCryptoActionExecutor(limit = DEFAULT_EXECUTOR_LIMIT_PER_CYCLE)
   };
 }
 
-async function collectCryptoOpportunities(): Promise<CryptoOpportunity[]> {
-  const queries = [
-    'web3 bounty in:title,body state:open',
-    'crypto grant in:title,body state:open',
-    'solidity bug bounty in:title,body state:open',
-    'blockchain quest reward in:title,body state:open',
-    'remote web3 job in:title,body state:open',
-  ];
+async function collectCryptoOpportunities(): Promise<{
+  opportunities: CryptoOpportunity[];
+  sourceStats: {
+    github: number;
+    feed: number;
+    total: number;
+    queries: number;
+    feeds: number;
+  };
+}> {
+  const queries = getGithubQueries();
+  const feedUrls = getFeedUrls();
 
   const issuesByQuery = await Promise.all(
     queries.map(async (query) => {
@@ -890,16 +1129,30 @@ async function collectCryptoOpportunities(): Promise<CryptoOpportunity[]> {
     })
   );
 
-  const flattened = issuesByQuery.flat();
+  const githubCandidates = issuesByQuery
+    .flat()
+    .map((issue) => issueToOpportunity(issue))
+    .filter((item): item is CryptoOpportunity => Boolean(item));
+
+  const feedItemsByUrl = await Promise.all(
+    feedUrls.map(async (feedUrl) => {
+      try {
+        return await fetchFeedItems(feedUrl);
+      } catch {
+        return [];
+      }
+    })
+  );
+
+  const feedCandidates = feedItemsByUrl
+    .flat()
+    .map((item) => feedItemToOpportunity(item))
+    .filter((candidate): candidate is CryptoOpportunity => Boolean(candidate));
+
   const seen = new Set<string>();
   const opportunities: CryptoOpportunity[] = [];
 
-  for (const issue of flattened) {
-    const candidate = issueToOpportunity(issue);
-    if (!candidate) {
-      continue;
-    }
-
+  for (const candidate of [...githubCandidates, ...feedCandidates]) {
     if (seen.has(candidate.url)) {
       continue;
     }
@@ -909,7 +1162,18 @@ async function collectCryptoOpportunities(): Promise<CryptoOpportunity[]> {
   }
 
   opportunities.sort((a, b) => b.score - a.score || b.rewardEstimateUsd - a.rewardEstimateUsd);
-  return opportunities.slice(0, DEFAULT_STORE_LIMIT);
+  const limited = opportunities.slice(0, DEFAULT_STORE_LIMIT);
+
+  return {
+    opportunities: limited,
+    sourceStats: {
+      github: githubCandidates.length,
+      feed: feedCandidates.length,
+      total: limited.length,
+      queries: queries.length,
+      feeds: feedUrls.length,
+    },
+  };
 }
 
 export async function getCryptoEngineStatus() {
@@ -931,6 +1195,10 @@ export async function getCryptoEngineStatus() {
     executorQueueInProgress,
     executorQueueCompleted,
     executorQueueSkipped,
+    sourceGithubCount,
+    sourceFeedCount,
+    sourceQueryCount,
+    sourceFeedSourceCount,
   ] = await Promise.all([
     getSetting('crypto_engine_last_run_at'),
     getSetting('crypto_engine_last_error'),
@@ -949,6 +1217,10 @@ export async function getCryptoEngineStatus() {
     getSetting('crypto_executor_queue_in_progress'),
     getSetting('crypto_executor_queue_completed'),
     getSetting('crypto_executor_queue_skipped'),
+    getSetting('crypto_engine_last_github_count'),
+    getSetting('crypto_engine_last_feed_count'),
+    getSetting('crypto_engine_last_query_count'),
+    getSetting('crypto_engine_last_feed_source_count'),
   ]);
 
   return {
@@ -973,6 +1245,12 @@ export async function getCryptoEngineStatus() {
         completed: Number(executorQueueCompleted || 0) || 0,
         skipped: Number(executorQueueSkipped || 0) || 0,
       },
+    },
+    sources: {
+      github: Number(sourceGithubCount || 0) || 0,
+      feed: Number(sourceFeedCount || 0) || 0,
+      queries: Number(sourceQueryCount || 0) || 0,
+      feedSources: Number(sourceFeedSourceCount || 0) || 0,
     },
   };
 }
@@ -1070,12 +1348,20 @@ export async function runCryptoRevenueCycle(): Promise<{
   submittedActions: number;
   preparedActions: number;
   failedActions: number;
+  sourceStats: {
+    github: number;
+    feed: number;
+    total: number;
+    queries: number;
+    feeds: number;
+  };
   topScore: number;
   error?: string;
 }> {
   try {
     await setSetting('crypto_engine_status', 'running');
-    const opportunities = await collectCryptoOpportunities();
+    const collected = await collectCryptoOpportunities();
+    const opportunities = collected.opportunities;
 
     let newItems = 0;
     let newActions = 0;
@@ -1103,6 +1389,10 @@ export async function runCryptoRevenueCycle(): Promise<{
       setSetting('crypto_engine_last_total', String(opportunities.length)),
       setSetting('crypto_engine_last_new', String(newItems)),
       setSetting('crypto_engine_last_actions', String(newActions)),
+      setSetting('crypto_engine_last_github_count', String(collected.sourceStats.github)),
+      setSetting('crypto_engine_last_feed_count', String(collected.sourceStats.feed)),
+      setSetting('crypto_engine_last_query_count', String(collected.sourceStats.queries)),
+      setSetting('crypto_engine_last_feed_source_count', String(collected.sourceStats.feeds)),
       setSetting('crypto_engine_interval_minutes', String(DEFAULT_ENGINE_INTERVAL_MINUTES)),
       setSetting('crypto_engine_last_error', ''),
     ]);
@@ -1115,6 +1405,7 @@ export async function runCryptoRevenueCycle(): Promise<{
       submittedActions: execution.submitted,
       preparedActions: execution.prepared,
       failedActions: execution.failed,
+      sourceStats: collected.sourceStats,
       topScore,
       mode: 'no_capital',
     });
@@ -1128,6 +1419,7 @@ export async function runCryptoRevenueCycle(): Promise<{
       submittedActions: execution.submitted,
       preparedActions: execution.prepared,
       failedActions: execution.failed,
+      sourceStats: collected.sourceStats,
       topScore,
     };
   } catch (error: unknown) {
@@ -1150,6 +1442,13 @@ export async function runCryptoRevenueCycle(): Promise<{
       submittedActions: 0,
       preparedActions: 0,
       failedActions: 0,
+      sourceStats: {
+        github: 0,
+        feed: 0,
+        total: 0,
+        queries: 0,
+        feeds: 0,
+      },
       topScore: 0,
       error: message,
     };

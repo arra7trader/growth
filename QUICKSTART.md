@@ -88,10 +88,16 @@ curl -X POST http://localhost:3000/api/track \
 ## Auto action executor
 
 - Engine crypto otomatis membuat action queue + draft submission.
+- Jika `AETHER_SUBMISSION_WEBHOOK_URL` diisi, bot auto-submit ke webhook.
 - Engine mencoba auto-submit langsung untuk target GitHub jika `GITHUB_TOKEN` tersedia.
 - Jika token tidak ada, hasil tetap diproses ke mode `outbox`.
 - Retry/backoff otomatis aktif dengan limit `CRYPTO_EXECUTOR_MAX_ATTEMPTS`.
 - Pantau di dashboard tab `Admin` bagian `Crypto Revenue Engine`.
+
+## Tambah sumber peluang (opsional)
+
+- `CRYPTO_GITHUB_QUERIES` untuk override query discovery.
+- `CRYPTO_RSS_FEED_URLS` untuk tambah sumber RSS (dipisah koma).
 
 Expect:
 
