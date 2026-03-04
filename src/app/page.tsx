@@ -539,7 +539,7 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
         <h2 className="text-lg font-semibold mb-4">Pilot Reports</h2>
         <div className="space-y-4">
           {pilotReports.length === 0 && (
-            <p className="text-sm text-muted-foreground">No pilot reports yet. Run `npm run pilot:once`.</p>
+            <p className="text-sm text-muted-foreground">No pilot reports yet. Pilot will publish automatically.</p>
           )}
 
           {pilotReports.map((item) => {

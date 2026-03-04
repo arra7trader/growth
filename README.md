@@ -44,7 +44,7 @@ npm run evolve
 
 ## Pilot bot automation
 
-Pilot bot adalah operator utama yang mengurus website secara otomatis:
+Pilot bot adalah operator utama yang mengurus website secara otomatis (always-on):
 
 - Menjalankan siklus evolusi secara berkala
 - Monitoring KPI (traffic, revenue, CTR, fitur aktif)
@@ -53,17 +53,7 @@ Pilot bot adalah operator utama yang mengurus website secara otomatis:
 - Menghasilkan report file `.md` + `.json` untuk Anda
 - Mengirim report ke tab `Admin` di dashboard
 
-Run sekali (uji cepat):
-
-```bash
-npm run pilot:once
-```
-
-Run terus menerus (daemon):
-
-```bash
-npm run pilot
-```
+Pilot tidak perlu di-start/stop manual. Sistem menjaga pilot tetap hidup otomatis.
 
 Lihat report terbaru langsung di terminal:
 
@@ -103,6 +93,7 @@ Returns:
 - `operationMode` (`free_autonomous`)
 - logs, metrics, evolution history
 - monetization summary + 14-day revenue trend
+- admin pilot status + pilot reports
 
 ### `POST /api/evolve`
 
@@ -119,6 +110,4 @@ Actions:
 - `npm run start`
 - `npm run lint`
 - `npm run evolve`
-- `npm run pilot`
-- `npm run pilot:once`
-- `npm run pilot:latest`
+- `npm run pilot:latest` (diagnostic report viewer)

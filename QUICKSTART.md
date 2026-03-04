@@ -41,21 +41,9 @@ npm run evolve
 
 Pilot berjalan terus otomatis (`free_autonomous`) tanpa perlu kontrol manual.
 
-## 6. Run pilot bot (recommended)
+## 6. Pilot always-on
 
-Pilot bot akan mengelola semuanya otomatis + membuat report perkembangan.
-
-Run sekali:
-
-```bash
-npm run pilot:once
-```
-
-Run terus:
-
-```bash
-npm run pilot
-```
+Pilot bot berjalan otomatis terus, tanpa start/stop manual.
 
 Lihat report terbaru:
 
