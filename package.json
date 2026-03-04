@@ -7,8 +7,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "evolve": "node scripts/evolve.mjs"
+    "lint": "tsc --noEmit -p tsconfig.lint.json",
+    "evolve": "tsx scripts/evolve.ts",
+    "pilot": "tsx scripts/pilot-bot.ts",
+    "pilot:once": "tsx scripts/pilot-bot.ts --once",
+    "pilot:latest": "tsx scripts/pilot-latest.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.14.0",
@@ -26,6 +29,7 @@
     "@types/react": "^19.0.10",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.3",
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.20.5"
   }
 }

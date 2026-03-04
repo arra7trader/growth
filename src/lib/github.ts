@@ -1,11 +1,12 @@
 import { Octokit } from '@octokit/rest';
+import tursoClient from './db';
 
-const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN,
-});
-
+const FREE_MODE = true;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GITHUB_OWNER = process.env.GITHUB_OWNER || 'arra7trader';
 const GITHUB_REPO = process.env.GITHUB_REPO || 'growth';
+
+const octokit = GITHUB_TOKEN ? new Octokit({ auth: GITHUB_TOKEN }) : null;
 
 export interface FileChange {
   path: string;
@@ -21,12 +22,23 @@ export interface EvolutionProposal {
   priority: 'low' | 'medium' | 'high' | 'critical';
 }
 
-/**
- * Get the current content of a file from GitHub
- */
+function getOctokit(): Octokit {
+  if (!octokit) {
+    throw new Error('GitHub token not configured. Set GITHUB_TOKEN or use free mode.');
+  }
+
+  return octokit;
+}
+
+function shouldUseLocalExecution(): boolean {
+  return FREE_MODE || !GITHUB_TOKEN;
+}
+
 export async function getFileContent(filePath: string): Promise<{ content: string; sha: string } | null> {
+  const client = getOctokit();
+
   try {
-    const response = await octokit.repos.getContent({
+    const response = await client.repos.getContent({
       owner: GITHUB_OWNER,
       repo: GITHUB_REPO,
       path: filePath,
@@ -38,26 +50,26 @@ export async function getFileContent(filePath: string): Promise<{ content: strin
     }
 
     return null;
-  } catch (error: any) {
-    if (error.status === 404) {
-      return null; // File doesn't exist
+  } catch (error: unknown) {
+    if (typeof error === 'object' && error && 'status' in error && (error as { status?: number }).status === 404) {
+      return null;
     }
+
     throw error;
   }
 }
 
-/**
- * Create or update a file in GitHub
- */
 export async function updateFile(filePath: string, content: string, message: string): Promise<{ commitSha: string; url: string }> {
+  const client = getOctokit();
+
   try {
     const existingFile = await getFileContent(filePath);
 
-    const response = await octokit.repos.createOrUpdateFileContents({
+    const response = await client.repos.createOrUpdateFileContents({
       owner: GITHUB_OWNER,
       repo: GITHUB_REPO,
       path: filePath,
-      message: message,
+      message,
       content: Buffer.from(content).toString('base64'),
       sha: existingFile?.sha,
       branch: 'main',
@@ -67,31 +79,25 @@ export async function updateFile(filePath: string, content: string, message: str
       commitSha: response.data.commit.sha || '',
       url: response.data.commit.html_url || '',
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to update file:', error);
     throw error;
   }
 }
 
-/**
- * Execute multiple file changes in a single commit
- */
 export async function commitChanges(changes: FileChange[], commitMessage: string): Promise<{ commitSha: string; url: string }> {
+  const client = getOctokit();
+
   try {
-    // For multiple files, we need to use the Git Data API
-    // First, get the current commit
-    const currentCommit = await octokit.repos.getBranch({
+    const currentCommit = await client.repos.getBranch({
       owner: GITHUB_OWNER,
       repo: GITHUB_REPO,
       branch: 'main',
     });
 
-    const currentSha = currentCommit.data.commit.sha;
-
-    // Create blobs for each file
     const blobs = await Promise.all(
       changes.map(async (change) => {
-        const blob = await octokit.git.createBlob({
+        const blob = await client.git.createBlob({
           owner: GITHUB_OWNER,
           repo: GITHUB_REPO,
           content: change.content,
@@ -101,14 +107,12 @@ export async function commitChanges(changes: FileChange[], commitMessage: string
       })
     );
 
-    // Get the current tree
-    const currentTree = await octokit.git.getTree({
+    const currentTree = await client.git.getTree({
       owner: GITHUB_OWNER,
       repo: GITHUB_REPO,
-      tree_sha: (currentCommit.data.commit as any).tree?.sha || '',
+      tree_sha: (currentCommit.data.commit as { tree?: { sha?: string } }).tree?.sha || '',
     });
 
-    // Create new tree with updated files
     const tree = blobs.map((blob) => ({
       path: blob.path,
       mode: '100644' as const,
@@ -116,15 +120,14 @@ export async function commitChanges(changes: FileChange[], commitMessage: string
       sha: blob.sha,
     }));
 
-    const newTree = await octokit.git.createTree({
+    const newTree = await client.git.createTree({
       owner: GITHUB_OWNER,
       repo: GITHUB_REPO,
       tree,
       base_tree: currentTree.data.sha,
     });
 
-    // Create new commit
-    const newCommit = await octokit.git.createCommit({
+    const newCommit = await client.git.createCommit({
       owner: GITHUB_OWNER,
       repo: GITHUB_REPO,
       message: commitMessage,
@@ -132,8 +135,7 @@ export async function commitChanges(changes: FileChange[], commitMessage: string
       parents: [currentCommit.data.commit.sha],
     });
 
-    // Update the branch reference
-    await octokit.git.updateRef({
+    await client.git.updateRef({
       owner: GITHUB_OWNER,
       repo: GITHUB_REPO,
       ref: 'heads/main',
@@ -144,22 +146,21 @@ export async function commitChanges(changes: FileChange[], commitMessage: string
       commitSha: newCommit.data.sha,
       url: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/commit/${newCommit.data.sha}`,
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to commit changes:', error);
     throw error;
   }
 }
 
-/**
- * Create a pull request for the changes
- */
 export async function createPullRequest(
   branch: string,
   title: string,
   body: string
 ): Promise<{ prNumber: number; url: string }> {
+  const client = getOctokit();
+
   try {
-    const response = await octokit.pulls.create({
+    const response = await client.pulls.create({
       owner: GITHUB_OWNER,
       repo: GITHUB_REPO,
       title,
@@ -172,52 +173,18 @@ export async function createPullRequest(
       prNumber: response.data.number,
       url: response.data.html_url,
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to create pull request:', error);
     throw error;
   }
 }
 
-/**
- * Self-Coding: Execute an evolution proposal
- */
-export async function executeEvolution(proposal: EvolutionProposal): Promise<{
-  success: boolean;
-  commitSha?: string;
-  url?: string;
-  error?: string;
-}> {
+async function logEvolution(
+  proposal: EvolutionProposal,
+  implementationStatus: string,
+  commitSha?: string
+) {
   try {
-    const timestamp = new Date().toISOString();
-    const commitMessage = `[AUTO] ${proposal.type}: ${proposal.title}\n\n${proposal.description}\n\nGenerated by Aether Autonomous System at ${timestamp}`;
-
-    // Apply all file changes
-    const result = await commitChanges(proposal.files, commitMessage);
-
-    // Log the evolution
-    await logEvolution(proposal, result.commitSha);
-
-    return {
-      success: true,
-      commitSha: result.commitSha,
-      url: result.url,
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-}
-
-/**
- * Log evolution to database
- */
-async function logEvolution(proposal: EvolutionProposal, commitSha: string) {
-  try {
-    const dbModule = await import('./db');
-    const tursoClient = dbModule.default;
-  
     await tursoClient.execute({
       sql: `
         INSERT INTO evolution_history (
@@ -228,16 +195,82 @@ async function logEvolution(proposal: EvolutionProposal, commitSha: string) {
           github_commit_hash
         ) VALUES (?, ?, ?, ?, ?)
       `,
-      args: [
-        Date.now(),
-        proposal.type,
-        JSON.stringify(proposal),
-        'implemented',
-        commitSha,
-      ],
+      args: [Date.now(), proposal.type, JSON.stringify(proposal), implementationStatus, commitSha ?? null],
     });
   } catch (error) {
     console.error('Failed to log evolution:', error);
+  }
+}
+
+async function storeLocalGeneratedContent(proposal: EvolutionProposal) {
+  try {
+    await tursoClient.execute({
+      sql: `
+        INSERT INTO dynamic_content (
+          content_type,
+          content_key,
+          content_data,
+          metadata
+        ) VALUES (?, ?, ?, ?)
+      `,
+      args: [
+        'local_evolution',
+        `local_evolution_${Date.now()}`,
+        JSON.stringify({
+          title: proposal.title,
+          description: proposal.description,
+          files: proposal.files,
+        }),
+        JSON.stringify({
+          mode: 'free_local',
+          priority: proposal.priority,
+          generatedAt: new Date().toISOString(),
+        }),
+      ],
+    });
+  } catch (error) {
+    console.error('Failed to store local generated content:', error);
+  }
+}
+
+export async function executeEvolution(proposal: EvolutionProposal): Promise<{
+  success: boolean;
+  commitSha?: string;
+  url?: string;
+  error?: string;
+}> {
+  const timestamp = new Date().toISOString();
+
+  if (shouldUseLocalExecution()) {
+    await storeLocalGeneratedContent(proposal);
+    await logEvolution(proposal, 'simulated_local');
+
+    return {
+      success: true,
+      url: `local-evolution://${timestamp}`,
+    };
+  }
+
+  try {
+    const commitMessage = `[AUTO] ${proposal.type}: ${proposal.title}\n\n${proposal.description}\n\nGenerated by Aether Autonomous System at ${timestamp}`;
+    const result = await commitChanges(proposal.files, commitMessage);
+
+    await logEvolution(proposal, 'implemented', result.commitSha);
+
+    return {
+      success: true,
+      commitSha: result.commitSha,
+      url: result.url,
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    await logEvolution(proposal, 'failed');
+
+    return {
+      success: false,
+      error: message,
+    };
   }
 }
 

@@ -78,6 +78,34 @@ export async function initializeDatabase() {
       )
     `);
 
+    // Create system settings table
+    await tursoClient.execute(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        setting_key TEXT UNIQUE NOT NULL,
+        setting_value TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Default operation mode: full free autonomous
+    await tursoClient.execute({
+      sql: `
+        INSERT OR IGNORE INTO system_settings (setting_key, setting_value)
+        VALUES ('operation_mode', 'free_autonomous')
+      `,
+      args: [],
+    });
+
+    // Evolution interval in minutes for autonomous mode
+    await tursoClient.execute({
+      sql: `
+        INSERT OR IGNORE INTO system_settings (setting_key, setting_value)
+        VALUES ('auto_interval_minutes', '180')
+      `,
+      args: [],
+    });
+
     console.log('Database initialized successfully');
   } catch (error) {
     console.error('Database initialization failed:', error);

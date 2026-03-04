@@ -25,6 +25,7 @@ export async function findAffiliateOpportunities(content: string): Promise<Affil
     // Get active affiliate links from database
     const result = await tursoClient.execute({
       sql: 'SELECT * FROM affiliate_links WHERE is_active = 1',
+      args: [],
     });
 
     const affiliateLinks: AffiliateLink[] = result.rows.map((row: any) => ({
@@ -125,6 +126,7 @@ export async function optimizeAdPlacement(): Promise<{
         WHERE metric_type = 'ctr'
         AND created_at > datetime('now', '-7 days')
       `,
+      args: [],
     });
 
     const avgCtr = Number(ctrResult.rows[0]?.avg_ctr) || 0;
@@ -186,6 +188,7 @@ export async function getMonetizationDashboard() {
         FROM growth_metrics
         WHERE created_at > datetime('now', '-30 days')
       `,
+      args: [],
     });
 
     // Get top affiliate links
@@ -197,6 +200,7 @@ export async function getMonetizationDashboard() {
         ORDER BY revenue DESC
         LIMIT 10
       `,
+      args: [],
     });
 
     // Get locked features
@@ -206,6 +210,7 @@ export async function getMonetizationDashboard() {
         FROM dynamic_content
         WHERE content_type = 'locked_feature'
       `,
+      args: [],
     });
 
     return {
