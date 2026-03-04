@@ -143,6 +143,9 @@ interface AdminCryptoStatus {
     feed?: number;
     queries?: number;
     feedSources?: number;
+    laneEligible?: number;
+    automationReady?: number;
+    strictRealLane?: boolean;
   };
   maintenance?: {
     lastRunAt?: string | null;
@@ -181,6 +184,16 @@ interface AdminCryptoStatus {
     };
   }>;
   cycleHistoryLimit?: number;
+  submissionMonitor?: {
+    lastRunAt?: string | null;
+    intervalMinutes?: number;
+    limit?: number;
+    checked?: number;
+    acceptedSignals?: number;
+    paidSignals?: number;
+    errors?: number;
+    lastError?: string | null;
+  };
 }
 
 interface AdminCryptoOpportunity {
@@ -193,6 +206,17 @@ interface AdminCryptoOpportunity {
   tags?: string[];
   rewardEstimateUsd?: number;
   score?: number;
+  monetization?: {
+    payableLikely?: boolean;
+    clearSubmissionPath?: boolean;
+    noCapitalFriendly?: boolean;
+    automationReady?: boolean;
+    laneEligible?: boolean;
+    confidence?: number;
+    payoutSignals?: string[];
+    submissionSignals?: string[];
+    blockers?: string[];
+  };
   updatedAt?: string | null;
 }
 
@@ -231,6 +255,21 @@ interface AdminCryptoSubmission {
   error?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  lifecycle?: {
+    stage?: 'prepared' | 'submitted' | 'reviewing' | 'accepted_signal' | 'paid_signal' | 'failed' | 'skipped' | string;
+    acceptedSignal?: boolean;
+    paidSignal?: boolean;
+    confidence?: number;
+    notes?: string[];
+    lastCheckedAt?: string | null;
+  };
+  monitor?: {
+    issueState?: string | null;
+    issueUpdatedAt?: string | null;
+    issueUrl?: string | null;
+    checkedAt?: string | null;
+    error?: string | null;
+  };
 }
 
 interface SystemStatus {
@@ -932,6 +971,22 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
               Sources indexed: GitHub {safeNumber(cryptoStatus.sources?.github)} (from {safeNumber(cryptoStatus.sources?.queries)} queries)
               {' | '}RSS {safeNumber(cryptoStatus.sources?.feed)} (from {safeNumber(cryptoStatus.sources?.feedSources)} feeds)
             </div>
+            <div className="text-sm text-muted-foreground">
+              Real lane: {cryptoStatus.sources?.strictRealLane === false ? 'flexible' : 'strict'}
+              {' | '}Eligible: <span className="text-foreground">{safeNumber(cryptoStatus.sources?.laneEligible)}</span>
+              {' | '}Automation-ready: <span className="text-foreground">{safeNumber(cryptoStatus.sources?.automationReady)}</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <InfoBox label="Monitor Last Run" value={formatRelativeTime(cryptoStatus.submissionMonitor?.lastRunAt || null)} />
+              <InfoBox label="Checked" value={String(safeNumber(cryptoStatus.submissionMonitor?.checked))} />
+              <InfoBox label="Accepted Signals" value={String(safeNumber(cryptoStatus.submissionMonitor?.acceptedSignals))} />
+              <InfoBox label="Paid Signals" value={String(safeNumber(cryptoStatus.submissionMonitor?.paidSignals))} accent={safeNumber(cryptoStatus.submissionMonitor?.paidSignals) > 0 ? 'primary' : undefined} />
+            </div>
+            {cryptoStatus.submissionMonitor?.lastError && (
+              <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+                Submission monitor issue: {String(cryptoStatus.submissionMonitor.lastError)}
+              </div>
+            )}
             <div className="rounded-xl border border-border/70 bg-muted/20 p-4 space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-sm font-semibold">Self-Healing Maintenance</h3>
@@ -1020,24 +1075,42 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
               {cryptoOpportunities.length === 0 && (
                 <p className="text-sm text-muted-foreground">No crypto opportunities indexed yet.</p>
               )}
-              {cryptoOpportunities.slice(0, 6).map((opportunity) => (
-                <div key={String(opportunity.key)} className="rounded-lg border border-border/70 p-3">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 rounded text-xs bg-primary/20 text-primary">
-                      {String(opportunity.category || 'opportunity')}
+                {cryptoOpportunities.slice(0, 6).map((opportunity) => (
+                  <div key={String(opportunity.key)} className="rounded-lg border border-border/70 p-3">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span className="px-2 py-0.5 rounded text-xs bg-primary/20 text-primary">
+                        {String(opportunity.category || 'opportunity')}
                     </span>
-                    <span className="px-2 py-0.5 rounded text-xs bg-success/20 text-success">
-                      score: {safeNumber(opportunity.score)}
-                    </span>
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {formatRelativeTime(opportunity.updatedAt || null)}
-                    </span>
-                  </div>
-                  <p className="text-sm font-medium">{String(opportunity.title || 'Untitled')}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Est. reward: {formatCurrency(opportunity.rewardEstimateUsd)} | Source: {String(opportunity.source || 'n/a')}
-                  </p>
-                  {opportunity.url && (
+                      <span className="px-2 py-0.5 rounded text-xs bg-success/20 text-success">
+                        score: {safeNumber(opportunity.score)}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs ${
+                          opportunity.monetization?.laneEligible ? 'bg-success/20 text-success' : 'bg-warning/20 text-warning'
+                        }`}
+                      >
+                        {opportunity.monetization?.laneEligible ? 'real-lane' : 'review-needed'}
+                      </span>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {formatRelativeTime(opportunity.updatedAt || null)}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium">{String(opportunity.title || 'Untitled')}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Est. reward: {formatCurrency(opportunity.rewardEstimateUsd)} | Source: {String(opportunity.source || 'n/a')}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Readiness: confidence {safeNumber(opportunity.monetization?.confidence)}/100
+                      {' | '}payable {opportunity.monetization?.payableLikely ? 'yes' : 'no'}
+                      {' | '}submit-path {opportunity.monetization?.clearSubmissionPath ? 'yes' : 'no'}
+                      {' | '}automation {opportunity.monetization?.automationReady ? 'yes' : 'no'}
+                    </p>
+                    {Array.isArray(opportunity.monetization?.blockers) && opportunity.monetization?.blockers.length > 0 && (
+                      <p className="text-xs text-warning mt-1">
+                        blockers: {opportunity.monetization?.blockers?.slice(0, 3).join(', ')}
+                      </p>
+                    )}
+                    {opportunity.url && (
                     <a
                       href={String(opportunity.url)}
                       target="_blank"
@@ -1113,11 +1186,38 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
                       <span className="px-2 py-0.5 rounded text-xs bg-success/20 text-success">
                         {String(submission.state || 'unknown')}
                       </span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs ${
+                          submission.lifecycle?.stage === 'paid_signal'
+                            ? 'bg-success/20 text-success'
+                            : submission.lifecycle?.stage === 'accepted_signal'
+                            ? 'bg-primary/20 text-primary'
+                            : submission.lifecycle?.stage === 'failed'
+                            ? 'bg-destructive/20 text-destructive'
+                            : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        {String(submission.lifecycle?.stage || 'n/a')}
+                      </span>
                       <span className="ml-auto text-xs text-muted-foreground">
                         {formatRelativeTime(submission.createdAt || submission.updatedAt || null)}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground">{String(submission.message || 'no message')}</p>
+                    {submission.lifecycle && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        confidence {safeNumber(submission.lifecycle.confidence)}/100
+                        {' | '}accepted {submission.lifecycle.acceptedSignal ? 'yes' : 'no'}
+                        {' | '}paid {submission.lifecycle.paidSignal ? 'yes' : 'no'}
+                        {' | '}checked {formatRelativeTime(submission.lifecycle.lastCheckedAt || null)}
+                      </p>
+                    )}
+                    {submission.monitor?.issueState && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Issue state: {String(submission.monitor.issueState)}
+                        {' | '}Issue update: {formatRelativeTime(submission.monitor.issueUpdatedAt || null)}
+                      </p>
+                    )}
                     {submission.error && (
                       <p className="text-xs text-warning mt-1">{String(submission.error)}</p>
                     )}

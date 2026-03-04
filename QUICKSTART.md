@@ -96,6 +96,8 @@ curl -X POST http://localhost:3000/api/track \
   - recovery task macet,
   - reprioritas overdue queue,
   - prune task lama + queue guard.
+- Real Lane A aktif: engine utamakan peluang dengan sinyal `payable + submit-path`.
+- Submission lifecycle monitor otomatis cek sinyal `accepted/paid` untuk target GitHub issue.
 - Pantau di dashboard tab `Admin` bagian `Crypto Revenue Engine`.
 
 ## Tambah sumber peluang (opsional)
@@ -107,6 +109,9 @@ curl -X POST http://localhost:3000/api/track \
 - `CRYPTO_TASK_RETENTION_DAYS` untuk retensi task selesai/skipped.
 - `CRYPTO_ACTIVE_TASK_LIMIT` untuk batas task aktif dalam antrean.
 - `CRYPTO_ENGINE_CYCLE_HISTORY_LIMIT` untuk panjang histori cycle di dashboard.
+- `CRYPTO_REAL_LANE_STRICT` untuk mode strict/flexible filter peluang real.
+- `CRYPTO_SUBMISSION_MONITOR_INTERVAL_MINUTES` untuk interval cek lifecycle submission.
+- `CRYPTO_SUBMISSION_MONITOR_LIMIT` untuk jumlah submission yang dicek per monitor run.
 
 Expect:
 

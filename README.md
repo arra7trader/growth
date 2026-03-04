@@ -157,6 +157,8 @@ Sistem memantau transfer masuk USDT BEP20 ke wallet payout secara otomatis (tanp
   - reprioritize queue yang overdue,
   - prune task lama, dan queue guard saat antrean terlalu padat.
 - Histori cycle disimpan otomatis dan divisualisasikan di Admin panel (`Cycle Growth Trend`).
+- Real Lane A aktif: engine memprioritaskan peluang yang terdeteksi `payable + clear submission path`.
+- Submission lifecycle monitor mengecek sinyal `accepted/paid` dari target GitHub issue secara otomatis.
 
 ## Source Enrichment
 
@@ -171,6 +173,9 @@ Sistem memantau transfer masuk USDT BEP20 ke wallet payout secara otomatis (tanp
 - `CRYPTO_TASK_RETENTION_DAYS`
 - `CRYPTO_ACTIVE_TASK_LIMIT`
 - `CRYPTO_ENGINE_CYCLE_HISTORY_LIMIT`
+- `CRYPTO_REAL_LANE_STRICT`
+- `CRYPTO_SUBMISSION_MONITOR_INTERVAL_MINUTES`
+- `CRYPTO_SUBMISSION_MONITOR_LIMIT`
 
 ## Scripts
 

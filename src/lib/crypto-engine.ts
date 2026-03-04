@@ -11,6 +11,8 @@ const DEFAULT_QUEUE_OVERDUE_MINUTES = 30;
 const DEFAULT_TASK_RETENTION_DAYS = 14;
 const DEFAULT_ACTIVE_TASK_LIMIT = 120;
 const DEFAULT_CYCLE_HISTORY_LIMIT = 36;
+const DEFAULT_SUBMISSION_MONITOR_INTERVAL_MINUTES = 20;
+const DEFAULT_SUBMISSION_MONITOR_LIMIT = 24;
 
 const DEFAULT_GITHUB_QUERIES = [
   'web3 bounty in:title,body state:open',
@@ -60,6 +62,17 @@ export interface CryptoOpportunity {
   tags: string[];
   rewardEstimateUsd: number;
   score: number;
+  monetization: {
+    payableLikely: boolean;
+    clearSubmissionPath: boolean;
+    noCapitalFriendly: boolean;
+    automationReady: boolean;
+    laneEligible: boolean;
+    confidence: number;
+    payoutSignals: string[];
+    submissionSignals: string[];
+    blockers: string[];
+  };
   updatedAt: string;
   metadata: Record<string, unknown>;
 }
@@ -106,6 +119,37 @@ interface SubmissionOutcome {
   error?: string;
 }
 
+interface SubmissionLifecycleRecord {
+  stage: 'prepared' | 'submitted' | 'reviewing' | 'accepted_signal' | 'paid_signal' | 'failed' | 'skipped';
+  acceptedSignal: boolean;
+  paidSignal: boolean;
+  source: 'initial' | 'github_monitor';
+  confidence: number;
+  notes: string[];
+  lastCheckedAt: string | null;
+}
+
+interface CryptoSubmissionRecord {
+  submissionKey: string;
+  taskKey: string;
+  opportunityKey: string;
+  channel: 'github_issue_comment' | 'webhook' | 'outbox';
+  state: 'submitted' | 'prepared' | 'failed' | 'skipped';
+  externalUrl: string | null;
+  targetUrl?: string | null;
+  message: string;
+  error: string | null;
+  createdAt: string;
+  lifecycle?: SubmissionLifecycleRecord;
+  monitor?: {
+    issueState?: string | null;
+    issueUpdatedAt?: string | null;
+    issueUrl?: string | null;
+    checkedAt?: string | null;
+    error?: string | null;
+  };
+}
+
 interface CryptoMaintenanceSummary {
   recoveredInProgress: number;
   reprioritizedQueued: number;
@@ -135,6 +179,9 @@ interface CryptoCycleSnapshot {
     github: number;
     feed: number;
     total: number;
+    laneEligible: number;
+    automationReady: number;
+    strictRealLane: boolean;
   };
   maintenance: {
     recoveredInProgress: number;
@@ -142,6 +189,11 @@ interface CryptoCycleSnapshot {
     prunedTasks: number;
     autoSkippedOverflow: number;
     health: 'healthy' | 'attention';
+  };
+  submissionMonitor: {
+    checked: number;
+    acceptedSignals: number;
+    paidSignals: number;
   };
 }
 
@@ -283,6 +335,77 @@ function parseDeadlineFromText(text: string): string | null {
   return null;
 }
 
+function uniqueWords(values: string[]): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value || '').trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+}
+
+function isGithubIssueLikeUrl(url: string): boolean {
+  return /^https?:\/\/github\.com\/[^/]+\/[^/]+\/(?:issues|pull)\/\d+/i.test(url);
+}
+
+function evaluateMonetizationReadiness(input: {
+  text: string;
+  url: string;
+  tags: string[];
+  source: string;
+  rewardEstimateUsd: number;
+}): CryptoOpportunity['monetization'] {
+  const lowerText = `${input.text}\n${input.tags.join(' ')}`.toLowerCase();
+  const payoutSignals = uniqueWords([
+    ...(lowerText.match(/\b(bounty|reward|grant|prize|payout|paid|compensation)\b/g) || []),
+    ...(lowerText.match(/\b(usd|usdt|usdc|dai|token)\b/g) || []),
+  ]);
+  const submissionSignals = uniqueWords([
+    ...(lowerText.match(/\b(submit|submission|apply|application|comment|issue|pr|pull request|form|deadline)\b/g) || []),
+  ]);
+  const blockers = uniqueWords([
+    ...(lowerText.match(/\b(unpaid|volunteer|no compensation|internship unpaid|donation only)\b/g) || []),
+  ]);
+
+  const payableByReward = input.rewardEstimateUsd > 0;
+  const payableByText = payoutSignals.length >= 2 || /\bpaid\b/.test(lowerText);
+  const payableLikely = payableByReward || payableByText;
+
+  const clearSubmissionPath =
+    submissionSignals.length >= 2 ||
+    isGithubIssueLikeUrl(input.url) ||
+    /\bfill (the )?form\b/.test(lowerText);
+
+  const noCapitalFriendly = /\b(no\s*cost|no\s*capital|free|open source|community|contribution)\b/.test(lowerText);
+  const automationReady = isGithubIssueLikeUrl(input.url) || Boolean(String(process.env.AETHER_SUBMISSION_WEBHOOK_URL || '').trim());
+  const laneEligible = payableLikely && clearSubmissionPath && blockers.length === 0;
+
+  let confidence = 35;
+  confidence += payableByReward ? 25 : 0;
+  confidence += payoutSignals.length >= 2 ? 15 : 0;
+  confidence += clearSubmissionPath ? 15 : 0;
+  confidence += automationReady ? 8 : 0;
+  confidence += noCapitalFriendly ? 6 : 0;
+  confidence -= blockers.length > 0 ? 40 : 0;
+
+  if (String(input.source || '').startsWith('feed:')) {
+    confidence -= 8;
+  }
+
+  return {
+    payableLikely,
+    clearSubmissionPath,
+    noCapitalFriendly,
+    automationReady,
+    laneEligible,
+    confidence: Math.max(1, Math.min(100, Math.round(confidence))),
+    payoutSignals,
+    submissionSignals,
+    blockers,
+  };
+}
+
 function opportunityCategoryFromText(text: string): CryptoOpportunity['category'] {
   const t = text.toLowerCase();
   if (t.includes('grant')) {
@@ -302,6 +425,7 @@ function estimateOpportunityScore(input: {
   updatedAt: string;
   category: CryptoOpportunity['category'];
   text: string;
+  monetization: CryptoOpportunity['monetization'];
 }): number {
   const now = Date.now();
   const updated = new Date(input.updatedAt).getTime();
@@ -323,7 +447,15 @@ function estimateOpportunityScore(input: {
     noCapitalBonus = 12;
   }
 
-  return Math.max(1, Math.min(100, Math.round(recencyScore + rewardScore + categoryScore + noCapitalBonus)));
+  const monetizationBonus =
+    (input.monetization.payableLikely ? 18 : -6) +
+    (input.monetization.clearSubmissionPath ? 14 : -8) +
+    (input.monetization.automationReady ? 8 : 0) +
+    (input.monetization.laneEligible ? 8 : -4) +
+    Math.round(input.monetization.confidence / 12) -
+    input.monetization.blockers.length * 8;
+
+  return Math.max(1, Math.min(100, Math.round(recencyScore + rewardScore + categoryScore + noCapitalBonus + monetizationBonus)));
 }
 
 async function getSetting(key: string): Promise<string | null> {
@@ -432,11 +564,19 @@ function feedItemToOpportunity(item: FeedOpportunityRaw): CryptoOpportunity | nu
   const combined = `${item.title}\n${item.summary}`;
   const rewardEstimateUsd = parseRewardEstimateUsd(combined);
   const category = opportunityCategoryFromText(combined);
+  const monetization = evaluateMonetizationReadiness({
+    text: combined,
+    url: item.link,
+    tags: [],
+    source: `feed:${item.source}`,
+    rewardEstimateUsd,
+  });
   const score = estimateOpportunityScore({
     rewardEstimateUsd,
     updatedAt: item.publishedAt || new Date().toISOString(),
     category,
     text: combined,
+    monetization,
   });
 
   return {
@@ -449,6 +589,7 @@ function feedItemToOpportunity(item: FeedOpportunityRaw): CryptoOpportunity | nu
     tags: [],
     rewardEstimateUsd,
     score,
+    monetization,
     updatedAt: item.publishedAt || new Date().toISOString(),
     metadata: {
       author: null,
@@ -471,12 +612,20 @@ function issueToOpportunity(issue: GithubIssue): CryptoOpportunity | null {
   const rewardEstimateUsd = parseRewardEstimateUsd(combined);
   const deadlineAt = parseDeadlineFromText(combined);
   const labelNames = (issue.labels || []).map((label) => String(label.name || '').trim()).filter(Boolean);
+  const monetization = evaluateMonetizationReadiness({
+    text: combined,
+    url,
+    tags: labelNames,
+    source: 'github',
+    rewardEstimateUsd,
+  });
   const summary = compactText(body || title, 240);
   const score = estimateOpportunityScore({
     rewardEstimateUsd,
     updatedAt: issue.updated_at || issue.created_at || new Date().toISOString(),
     category,
     text: combined,
+    monetization,
   });
 
   return {
@@ -489,6 +638,7 @@ function issueToOpportunity(issue: GithubIssue): CryptoOpportunity | null {
     tags: labelNames.slice(0, 8),
     rewardEstimateUsd,
     score,
+    monetization,
     updatedAt: issue.updated_at || issue.created_at || new Date().toISOString(),
     metadata: {
       author: issue.user?.login || null,
@@ -533,9 +683,11 @@ function dueAtFromOpportunity(opportunity: CryptoOpportunity): string {
 
 function buildRunbook(opportunity: CryptoOpportunity) {
   const objective = `Submit a high-quality ${opportunity.category} response for: ${opportunity.title}`;
+  const monetizationLine = `Monetization readiness: payable=${opportunity.monetization.payableLikely}, submission_path=${opportunity.monetization.clearSubmissionPath}, automation=${opportunity.monetization.automationReady}, confidence=${opportunity.monetization.confidence}`;
   const steps = [
     'Read full opportunity brief and acceptance criteria.',
     'Extract hard requirements and submission deadline.',
+    `Confirm payout signal and submit-path signal. ${monetizationLine}`,
     'Produce concise technical proposal aligned to requirements.',
     'Prepare proof artifacts (links, screenshots, code references).',
     'Submit through official channel and log submission reference.',
@@ -556,6 +708,10 @@ function buildRunbook(opportunity: CryptoOpportunity) {
     '- Directly aligned to success criteria.',
     '- Fast execution timeline with verification-ready output.',
     '- Risk controls and clear communication.',
+    `- Readiness confidence: ${opportunity.monetization.confidence}/100.`,
+    '',
+    `Payout signals: ${opportunity.monetization.payoutSignals.join(', ') || 'none detected'}`,
+    `Submission signals: ${opportunity.monetization.submissionSignals.join(', ') || 'none detected'}`,
     '',
     `Target URL: ${opportunity.url}`,
   ].join('\n');
@@ -694,6 +850,11 @@ async function upsertOpportunity(item: CryptoOpportunity): Promise<boolean> {
         category: item.category,
         score: item.score,
         rewardEstimateUsd: item.rewardEstimateUsd,
+        payableLikely: item.monetization.payableLikely,
+        clearSubmissionPath: item.monetization.clearSubmissionPath,
+        automationReady: item.monetization.automationReady,
+        laneEligible: item.monetization.laneEligible,
+        confidence: item.monetization.confidence,
       }),
     ],
   });
@@ -784,6 +945,48 @@ async function persistActionTask(item: CryptoActionTask): Promise<void> {
 }
 
 async function persistSubmission(task: CryptoActionTask, outcome: SubmissionOutcome): Promise<void> {
+  const createdAt = new Date().toISOString();
+  const lifecycle: SubmissionLifecycleRecord =
+    outcome.state === 'submitted'
+      ? {
+          stage: 'reviewing',
+          acceptedSignal: false,
+          paidSignal: false,
+          source: 'initial',
+          confidence: 52,
+          notes: ['Submission delivered, waiting for external review.'],
+          lastCheckedAt: createdAt,
+        }
+      : outcome.state === 'prepared'
+      ? {
+          stage: 'prepared',
+          acceptedSignal: false,
+          paidSignal: false,
+          source: 'initial',
+          confidence: 30,
+          notes: ['Draft prepared but not delivered to target channel.'],
+          lastCheckedAt: createdAt,
+        }
+      : outcome.state === 'failed'
+      ? {
+          stage: 'failed',
+          acceptedSignal: false,
+          paidSignal: false,
+          source: 'initial',
+          confidence: 10,
+          notes: [outcome.error || 'Submission failed.'],
+          lastCheckedAt: createdAt,
+        }
+      : {
+          stage: 'skipped',
+          acceptedSignal: false,
+          paidSignal: false,
+          source: 'initial',
+          confidence: 10,
+          notes: ['Submission skipped by execution rules.'],
+          lastCheckedAt: createdAt,
+        };
+
   await tursoClient.execute({
     sql: `
       INSERT INTO dynamic_content (content_type, content_key, content_data, metadata)
@@ -802,17 +1005,309 @@ async function persistSubmission(task: CryptoActionTask, outcome: SubmissionOutc
         channel: outcome.channel,
         state: outcome.state,
         externalUrl: outcome.externalUrl,
+        targetUrl: task.targetUrl,
         message: outcome.message,
         error: outcome.error || null,
-        createdAt: new Date().toISOString(),
+        lifecycle,
+        createdAt,
       }),
       JSON.stringify({
         taskKey: task.key,
         channel: outcome.channel,
         state: outcome.state,
+        stage: lifecycle.stage,
+        acceptedSignal: lifecycle.acceptedSignal,
+        paidSignal: lifecycle.paidSignal,
       }),
     ],
   });
+}
+
+function parseSubmissionRecord(contentKey: unknown, contentData: unknown, updatedAt: unknown): CryptoSubmissionRecord | null {
+  try {
+    const parsed = JSON.parse(String(contentData || '{}')) as Partial<CryptoSubmissionRecord>;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    const lifecycle = parsed.lifecycle;
+    return {
+      submissionKey: String(parsed.submissionKey || contentKey || ''),
+      taskKey: String(parsed.taskKey || ''),
+      opportunityKey: String(parsed.opportunityKey || ''),
+      channel: (parsed.channel as CryptoSubmissionRecord['channel']) || 'outbox',
+      state: (parsed.state as CryptoSubmissionRecord['state']) || 'prepared',
+      externalUrl: parsed.externalUrl ? String(parsed.externalUrl) : null,
+      targetUrl: parsed.targetUrl ? String(parsed.targetUrl) : null,
+      message: String(parsed.message || ''),
+      error: parsed.error ? String(parsed.error) : null,
+      createdAt: String(parsed.createdAt || updatedAt || new Date().toISOString()),
+      lifecycle: lifecycle
+        ? {
+            stage: (lifecycle.stage as SubmissionLifecycleRecord['stage']) || 'reviewing',
+            acceptedSignal: Boolean(lifecycle.acceptedSignal),
+            paidSignal: Boolean(lifecycle.paidSignal),
+            source: (lifecycle.source as SubmissionLifecycleRecord['source']) || 'initial',
+            confidence: safeNumber(lifecycle.confidence, 50),
+            notes: Array.isArray(lifecycle.notes) ? lifecycle.notes.map((item) => String(item)).slice(0, 5) : [],
+            lastCheckedAt: safeIsoOrNull(lifecycle.lastCheckedAt),
+          }
+        : undefined,
+      monitor: parsed.monitor
+        ? {
+            issueState: parsed.monitor.issueState ? String(parsed.monitor.issueState) : null,
+            issueUpdatedAt: safeIsoOrNull(parsed.monitor.issueUpdatedAt),
+            issueUrl: parsed.monitor.issueUrl ? String(parsed.monitor.issueUrl) : null,
+            checkedAt: safeIsoOrNull(parsed.monitor.checkedAt),
+            error: parsed.monitor.error ? String(parsed.monitor.error) : null,
+          }
+        : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+interface GithubIssueSnapshot {
+  html_url?: string;
+  state?: string;
+  title?: string;
+  body?: string | null;
+  updated_at?: string;
+  labels?: Array<{ name?: string }>;
+}
+
+async function fetchGithubIssueSnapshot(url: string): Promise<GithubIssueSnapshot> {
+  const parsed = parseGithubIssueLikeUrl(url);
+  if (!parsed) {
+    throw new Error('Target URL is not a GitHub issue/pull URL');
+  }
+
+  const endpoint = `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/issues/${parsed.number}`;
+  const response = await fetch(endpoint, {
+    headers: getJsonHeaders(),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub issue status HTTP ${response.status}`);
+  }
+
+  return (await response.json()) as GithubIssueSnapshot;
+}
+
+function inferLifecycleFromGithubIssue(snapshot: GithubIssueSnapshot): {
+  lifecycle: SubmissionLifecycleRecord;
+  issueState: string | null;
+  issueUpdatedAt: string | null;
+  issueUrl: string | null;
+} {
+  const title = String(snapshot.title || '');
+  const body = String(snapshot.body || '');
+  const labels = (snapshot.labels || []).map((item) => String(item.name || '').toLowerCase()).filter(Boolean);
+  const state = String(snapshot.state || '').toLowerCase();
+  const combined = `${title}\n${body}\n${labels.join(' ')}`.toLowerCase();
+
+  const paidSignal = /\b(paid|payment sent|reward sent|payout sent|distributed|funds sent|sent to wallet)\b/.test(combined);
+  const acceptedSignal =
+    paidSignal ||
+    /\b(accepted|approved|winner|awarded|selected|completed|resolved|merged|bounty complete)\b/.test(combined) ||
+    labels.some((label) => /(winner|paid|accepted|completed|resolved|awarded)/.test(label));
+  const rejectedSignal = /\b(rejected|not selected|declined|disqualified)\b/.test(combined);
+
+  let stage: SubmissionLifecycleRecord['stage'] = 'reviewing';
+  let confidence = state === 'closed' ? 62 : 54;
+  const notes: string[] = [];
+
+  if (rejectedSignal) {
+    stage = 'failed';
+    confidence = 75;
+    notes.push('Negative review signal detected from issue text/labels.');
+  } else if (paidSignal) {
+    stage = 'paid_signal';
+    confidence = 92;
+    notes.push('Payment-related signal detected from issue text/labels.');
+  } else if (acceptedSignal) {
+    stage = 'accepted_signal';
+    confidence = state === 'closed' ? 88 : 78;
+    notes.push('Acceptance/winner signal detected from issue text/labels.');
+  } else if (state === 'closed') {
+    stage = 'reviewing';
+    confidence = 64;
+    notes.push('Issue closed, but no explicit accepted/paid signal yet.');
+  } else {
+    notes.push('Issue still under review (open/no payout signal yet).');
+  }
+
+  return {
+    lifecycle: {
+      stage,
+      acceptedSignal,
+      paidSignal,
+      source: 'github_monitor',
+      confidence,
+      notes: notes.slice(0, 3),
+      lastCheckedAt: new Date().toISOString(),
+    },
+    issueState: state || null,
+    issueUpdatedAt: safeIsoOrNull(snapshot.updated_at),
+    issueUrl: snapshot.html_url ? String(snapshot.html_url) : null,
+  };
+}
+
+function shouldRunMonitorByInterval(lastRunAt: string | null, intervalMinutes: number): boolean {
+  if (!lastRunAt) {
+    return true;
+  }
+  const last = new Date(lastRunAt).getTime();
+  if (!Number.isFinite(last)) {
+    return true;
+  }
+  return Date.now() - last >= intervalMinutes * 60 * 1000;
+}
+
+async function runSubmissionLifecycleMonitor() {
+  const intervalMinutes = Math.max(
+    5,
+    safeInteger(process.env.CRYPTO_SUBMISSION_MONITOR_INTERVAL_MINUTES, DEFAULT_SUBMISSION_MONITOR_INTERVAL_MINUTES)
+  );
+  const monitorLimit = Math.max(4, safeInteger(process.env.CRYPTO_SUBMISSION_MONITOR_LIMIT, DEFAULT_SUBMISSION_MONITOR_LIMIT));
+  const lastRunAt = await getSetting('crypto_submission_monitor_last_run_at');
+  const due = shouldRunMonitorByInterval(lastRunAt, intervalMinutes);
+  const nowIso = new Date().toISOString();
+
+  if (!due) {
+    const [lastChecked, acceptedSignals, paidSignals, lastError] = await Promise.all([
+      getSetting('crypto_submission_monitor_last_checked'),
+      getSetting('crypto_submission_monitor_last_accepted_signals'),
+      getSetting('crypto_submission_monitor_last_paid_signals'),
+      getSetting('crypto_submission_monitor_last_error'),
+    ]);
+    return {
+      due: false,
+      checked: Number(lastChecked || 0) || 0,
+      acceptedSignals: Number(acceptedSignals || 0) || 0,
+      paidSignals: Number(paidSignals || 0) || 0,
+      errors: 0,
+      lastError: lastError || null,
+      lastRunAt,
+      intervalMinutes,
+      limit: monitorLimit,
+    };
+  }
+
+  const submissionsResult = await tursoClient.execute({
+    sql: `
+      SELECT content_key, content_data, updated_at
+      FROM dynamic_content
+      WHERE content_type = 'crypto_submission'
+      ORDER BY updated_at DESC
+      LIMIT ?
+    `,
+    args: [Math.max(10, monitorLimit * 3)],
+  });
+
+  const records = submissionsResult.rows
+    .map((row) => parseSubmissionRecord(row.content_key, row.content_data, row.updated_at))
+    .filter((row): row is CryptoSubmissionRecord => Boolean(row))
+    .filter((row) => row.channel === 'github_issue_comment' && row.state === 'submitted');
+
+  let checked = 0;
+  let acceptedSignals = 0;
+  let paidSignals = 0;
+  let errors = 0;
+  let lastError = '';
+
+  for (const record of records.slice(0, monitorLimit)) {
+    const target = record.targetUrl || record.externalUrl || '';
+    if (!isGithubIssueLikeUrl(target)) {
+      continue;
+    }
+
+    try {
+      const issue = await fetchGithubIssueSnapshot(target);
+      const inferred = inferLifecycleFromGithubIssue(issue);
+      const nextRecord: CryptoSubmissionRecord = {
+        ...record,
+        lifecycle: inferred.lifecycle,
+        monitor: {
+          issueState: inferred.issueState,
+          issueUpdatedAt: inferred.issueUpdatedAt,
+          issueUrl: inferred.issueUrl,
+          checkedAt: nowIso,
+          error: null,
+        },
+      };
+
+      if (inferred.lifecycle.acceptedSignal) {
+        acceptedSignals += 1;
+      }
+      if (inferred.lifecycle.paidSignal) {
+        paidSignals += 1;
+      }
+
+      await tursoClient.execute({
+        sql: `
+          INSERT INTO dynamic_content (content_type, content_key, content_data, metadata)
+          VALUES ('crypto_submission', ?, ?, ?)
+          ON CONFLICT(content_key) DO UPDATE SET
+            content_data = excluded.content_data,
+            metadata = excluded.metadata,
+            updated_at = CURRENT_TIMESTAMP
+        `,
+        args: [
+          nextRecord.submissionKey,
+          JSON.stringify(nextRecord),
+          JSON.stringify({
+            taskKey: nextRecord.taskKey,
+            channel: nextRecord.channel,
+            state: nextRecord.state,
+            stage: nextRecord.lifecycle?.stage || null,
+            acceptedSignal: Boolean(nextRecord.lifecycle?.acceptedSignal),
+            paidSignal: Boolean(nextRecord.lifecycle?.paidSignal),
+          }),
+        ],
+      });
+
+      checked += 1;
+    } catch (error: unknown) {
+      errors += 1;
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  await Promise.all([
+    setSetting('crypto_submission_monitor_last_run_at', nowIso),
+    setSetting('crypto_submission_monitor_interval_minutes', String(intervalMinutes)),
+    setSetting('crypto_submission_monitor_limit', String(monitorLimit)),
+    setSetting('crypto_submission_monitor_last_checked', String(checked)),
+    setSetting('crypto_submission_monitor_last_accepted_signals', String(acceptedSignals)),
+    setSetting('crypto_submission_monitor_last_paid_signals', String(paidSignals)),
+    setSetting('crypto_submission_monitor_last_errors', String(errors)),
+    setSetting('crypto_submission_monitor_last_error', lastError),
+  ]);
+
+  if (checked > 0 || errors > 0) {
+    await logCrypto('crypto', 'Crypto submission lifecycle monitor completed', {
+      checked,
+      acceptedSignals,
+      paidSignals,
+      errors,
+      lastError: lastError || null,
+    });
+  }
+
+  return {
+    due: true,
+    checked,
+    acceptedSignals,
+    paidSignals,
+    errors,
+    lastError: lastError || null,
+    lastRunAt: nowIso,
+    intervalMinutes,
+    limit: monitorLimit,
+  };
 }
 
 async function submitToGithubIssueComment(task: CryptoActionTask): Promise<SubmissionOutcome> {
@@ -946,6 +1441,30 @@ async function submitToWebhook(task: CryptoActionTask): Promise<SubmissionOutcom
 }
 
 async function runSubmissionAdapter(task: CryptoActionTask): Promise<SubmissionOutcome> {
+  const targetIsGithub = isGithubIssueLikeUrl(task.targetUrl);
+
+  if (targetIsGithub) {
+    const githubOutcome = await submitToGithubIssueComment(task);
+    if (githubOutcome.state === 'submitted' || githubOutcome.state === 'prepared') {
+      return githubOutcome;
+    }
+
+    const webhookOutcome = await submitToWebhook(task);
+    if (webhookOutcome?.state === 'submitted') {
+      return webhookOutcome;
+    }
+
+    if (webhookOutcome?.state === 'failed') {
+      return {
+        ...githubOutcome,
+        message: `${githubOutcome.message} | ${webhookOutcome.message}`,
+        error: [githubOutcome.error, webhookOutcome.error].filter(Boolean).join(' | ') || githubOutcome.error,
+      };
+    }
+
+    return githubOutcome;
+  }
+
   const webhookOutcome = await submitToWebhook(task);
   if (webhookOutcome?.state === 'submitted') {
     return webhookOutcome;
@@ -1429,6 +1948,9 @@ async function collectCryptoOpportunities(): Promise<{
     total: number;
     queries: number;
     feeds: number;
+    laneEligible: number;
+    automationReady: number;
+    strictRealLane: boolean;
   };
 }> {
   const queries = getGithubQueries();
@@ -1476,8 +1998,13 @@ async function collectCryptoOpportunities(): Promise<{
     opportunities.push(candidate);
   }
 
-  opportunities.sort((a, b) => b.score - a.score || b.rewardEstimateUsd - a.rewardEstimateUsd);
-  const limited = opportunities.slice(0, DEFAULT_STORE_LIMIT);
+  const strictRealLane = String(process.env.CRYPTO_REAL_LANE_STRICT || 'true').toLowerCase() !== 'false';
+  const laneEligible = opportunities.filter((item) => item.monetization.laneEligible);
+  const automationReadyCount = opportunities.filter((item) => item.monetization.automationReady).length;
+  const selectedPool = strictRealLane && laneEligible.length > 0 ? laneEligible : opportunities;
+
+  selectedPool.sort((a, b) => b.score - a.score || b.rewardEstimateUsd - a.rewardEstimateUsd);
+  const limited = selectedPool.slice(0, DEFAULT_STORE_LIMIT);
 
   return {
     opportunities: limited,
@@ -1487,6 +2014,9 @@ async function collectCryptoOpportunities(): Promise<{
       total: limited.length,
       queries: queries.length,
       feeds: feedUrls.length,
+      laneEligible: laneEligible.length,
+      automationReady: automationReadyCount,
+      strictRealLane,
     },
   };
 }
@@ -1514,6 +2044,9 @@ export async function getCryptoEngineStatus() {
     sourceFeedCount,
     sourceQueryCount,
     sourceFeedSourceCount,
+    sourceLaneEligible,
+    sourceAutomationReady,
+    sourceStrictRealLane,
     maintenanceLastRunAt,
     maintenanceRecovered,
     maintenanceReprioritized,
@@ -1527,6 +2060,14 @@ export async function getCryptoEngineStatus() {
     maintenanceActiveTaskLimit,
     cycleHistoryRaw,
     cycleHistoryLimit,
+    submissionMonitorLastRunAt,
+    submissionMonitorInterval,
+    submissionMonitorLimit,
+    submissionMonitorLastChecked,
+    submissionMonitorAcceptedSignals,
+    submissionMonitorPaidSignals,
+    submissionMonitorLastErrors,
+    submissionMonitorLastError,
   ] = await Promise.all([
     getSetting('crypto_engine_last_run_at'),
     getSetting('crypto_engine_last_error'),
@@ -1549,6 +2090,9 @@ export async function getCryptoEngineStatus() {
     getSetting('crypto_engine_last_feed_count'),
     getSetting('crypto_engine_last_query_count'),
     getSetting('crypto_engine_last_feed_source_count'),
+    getSetting('crypto_engine_last_lane_eligible_count'),
+    getSetting('crypto_engine_last_automation_ready_count'),
+    getSetting('crypto_engine_strict_real_lane'),
     getSetting('crypto_maintenance_last_run_at'),
     getSetting('crypto_maintenance_last_recovered_in_progress'),
     getSetting('crypto_maintenance_last_reprioritized_queued'),
@@ -1562,6 +2106,14 @@ export async function getCryptoEngineStatus() {
     getSetting('crypto_maintenance_active_task_limit'),
     getSetting('crypto_engine_cycle_history'),
     getSetting('crypto_engine_cycle_history_limit'),
+    getSetting('crypto_submission_monitor_last_run_at'),
+    getSetting('crypto_submission_monitor_interval_minutes'),
+    getSetting('crypto_submission_monitor_limit'),
+    getSetting('crypto_submission_monitor_last_checked'),
+    getSetting('crypto_submission_monitor_last_accepted_signals'),
+    getSetting('crypto_submission_monitor_last_paid_signals'),
+    getSetting('crypto_submission_monitor_last_errors'),
+    getSetting('crypto_submission_monitor_last_error'),
   ]);
 
   let maintenanceIssuesList: string[] = [];
@@ -1618,6 +2170,9 @@ export async function getCryptoEngineStatus() {
       feed: Number(sourceFeedCount || 0) || 0,
       queries: Number(sourceQueryCount || 0) || 0,
       feedSources: Number(sourceFeedSourceCount || 0) || 0,
+      laneEligible: Number(sourceLaneEligible || 0) || 0,
+      automationReady: Number(sourceAutomationReady || 0) || 0,
+      strictRealLane: sourceStrictRealLane !== 'false',
     },
     maintenance: {
       lastRunAt: maintenanceLastRunAt || null,
@@ -1636,6 +2191,18 @@ export async function getCryptoEngineStatus() {
     },
     cycleHistory,
     cycleHistoryLimit: Number(cycleHistoryLimit || DEFAULT_CYCLE_HISTORY_LIMIT) || DEFAULT_CYCLE_HISTORY_LIMIT,
+    submissionMonitor: {
+      lastRunAt: submissionMonitorLastRunAt || null,
+      intervalMinutes:
+        Number(submissionMonitorInterval || DEFAULT_SUBMISSION_MONITOR_INTERVAL_MINUTES) ||
+        DEFAULT_SUBMISSION_MONITOR_INTERVAL_MINUTES,
+      limit: Number(submissionMonitorLimit || DEFAULT_SUBMISSION_MONITOR_LIMIT) || DEFAULT_SUBMISSION_MONITOR_LIMIT,
+      checked: Number(submissionMonitorLastChecked || 0) || 0,
+      acceptedSignals: Number(submissionMonitorAcceptedSignals || 0) || 0,
+      paidSignals: Number(submissionMonitorPaidSignals || 0) || 0,
+      errors: Number(submissionMonitorLastErrors || 0) || 0,
+      lastError: submissionMonitorLastError || null,
+    },
   };
 }
 
@@ -1738,6 +2305,9 @@ export async function runCryptoRevenueCycle(): Promise<{
     total: number;
     queries: number;
     feeds: number;
+    laneEligible: number;
+    automationReady: number;
+    strictRealLane: boolean;
   };
   topScore: number;
   maintenance: {
@@ -1753,6 +2323,17 @@ export async function runCryptoRevenueCycle(): Promise<{
       skipped: number;
     };
     issues: string[];
+  };
+  submissionMonitor: {
+    due: boolean;
+    checked: number;
+    acceptedSignals: number;
+    paidSignals: number;
+    errors: number;
+    lastError: string | null;
+    lastRunAt: string | null;
+    intervalMinutes: number;
+    limit: number;
   };
   error?: string;
 }> {
@@ -1781,6 +2362,7 @@ export async function runCryptoRevenueCycle(): Promise<{
 
     const execution = await runCryptoActionExecutor(DEFAULT_EXECUTOR_LIMIT_PER_CYCLE);
     const maintenance = await runCryptoMaintenance();
+    const submissionMonitor = await runSubmissionLifecycleMonitor();
     const topScore = opportunities[0]?.score || 0;
     const cycleSnapshot: CryptoCycleSnapshot = {
       at: new Date().toISOString(),
@@ -1796,6 +2378,9 @@ export async function runCryptoRevenueCycle(): Promise<{
         github: collected.sourceStats.github,
         feed: collected.sourceStats.feed,
         total: collected.sourceStats.total,
+        laneEligible: collected.sourceStats.laneEligible,
+        automationReady: collected.sourceStats.automationReady,
+        strictRealLane: collected.sourceStats.strictRealLane,
       },
       maintenance: {
         recoveredInProgress: maintenance.recoveredInProgress,
@@ -1803,6 +2388,11 @@ export async function runCryptoRevenueCycle(): Promise<{
         prunedTasks: maintenance.prunedTasks,
         autoSkippedOverflow: maintenance.autoSkippedOverflow,
         health: maintenance.health,
+      },
+      submissionMonitor: {
+        checked: submissionMonitor.checked,
+        acceptedSignals: submissionMonitor.acceptedSignals,
+        paidSignals: submissionMonitor.paidSignals,
       },
     };
 
@@ -1816,6 +2406,9 @@ export async function runCryptoRevenueCycle(): Promise<{
       setSetting('crypto_engine_last_feed_count', String(collected.sourceStats.feed)),
       setSetting('crypto_engine_last_query_count', String(collected.sourceStats.queries)),
       setSetting('crypto_engine_last_feed_source_count', String(collected.sourceStats.feeds)),
+      setSetting('crypto_engine_last_lane_eligible_count', String(collected.sourceStats.laneEligible)),
+      setSetting('crypto_engine_last_automation_ready_count', String(collected.sourceStats.automationReady)),
+      setSetting('crypto_engine_strict_real_lane', String(collected.sourceStats.strictRealLane)),
       setSetting('crypto_engine_interval_minutes', String(DEFAULT_ENGINE_INTERVAL_MINUTES)),
       setSetting('crypto_engine_last_error', ''),
     ]);
@@ -1832,7 +2425,8 @@ export async function runCryptoRevenueCycle(): Promise<{
       sourceStats: collected.sourceStats,
       topScore,
       maintenance,
-      mode: 'no_capital',
+      submissionMonitor,
+      mode: 'real_lane_a',
     });
 
     return {
@@ -1847,6 +2441,7 @@ export async function runCryptoRevenueCycle(): Promise<{
       sourceStats: collected.sourceStats,
       topScore,
       maintenance,
+      submissionMonitor,
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
@@ -1874,6 +2469,9 @@ export async function runCryptoRevenueCycle(): Promise<{
         total: 0,
         queries: 0,
         feeds: 0,
+        laneEligible: 0,
+        automationReady: 0,
+        strictRealLane: true,
       },
       topScore: 0,
       maintenance: {
@@ -1889,6 +2487,17 @@ export async function runCryptoRevenueCycle(): Promise<{
           skipped: 0,
         },
         issues: [message],
+      },
+      submissionMonitor: {
+        due: false,
+        checked: 0,
+        acceptedSignals: 0,
+        paidSignals: 0,
+        errors: 1,
+        lastError: message,
+        lastRunAt: null,
+        intervalMinutes: DEFAULT_SUBMISSION_MONITOR_INTERVAL_MINUTES,
+        limit: DEFAULT_SUBMISSION_MONITOR_LIMIT,
       },
       error: message,
     };
