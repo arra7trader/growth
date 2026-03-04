@@ -15,18 +15,18 @@ const DEFAULT_SUBMISSION_MONITOR_INTERVAL_MINUTES = 20;
 const DEFAULT_SUBMISSION_MONITOR_LIMIT = 24;
 
 const DEFAULT_GITHUB_QUERIES = [
-  'web3 bounty in:title,body state:open',
-  'crypto grant in:title,body state:open',
-  'solidity bug bounty in:title,body state:open',
-  'blockchain quest reward in:title,body state:open',
-  'remote web3 job in:title,body state:open',
-  'defi bug bounty in:title,body state:open',
-  'evm security bounty in:title,body state:open',
-  'dao grant in:title,body state:open',
-  'zk grant in:title,body state:open',
-  'smart contract audit bounty in:title,body state:open',
-  'ecosystem grant in:title,body state:open',
-  'community quest web3 in:title,body state:open',
+  'web3 bounty is:issue in:title,body state:open',
+  'crypto grant is:issue in:title,body state:open',
+  'solidity bug bounty is:issue in:title,body state:open',
+  'blockchain quest reward is:issue in:title,body state:open',
+  'remote web3 job is:issue in:title,body state:open',
+  'defi bug bounty is:issue in:title,body state:open',
+  'evm security bounty is:issue in:title,body state:open',
+  'dao grant is:issue in:title,body state:open',
+  'zk grant is:issue in:title,body state:open',
+  'smart contract audit bounty is:issue in:title,body state:open',
+  'ecosystem grant is:issue in:title,body state:open',
+  'community quest web3 is:issue in:title,body state:open',
 ];
 
 interface GithubIssue {
@@ -260,6 +260,23 @@ function getFeedUrls(): string[] {
     .filter((item) => /^https?:\/\//i.test(item));
 }
 
+function normalizeGithubIssueQuery(query: string): string {
+  let normalized = String(query || '').trim().replace(/\s+/g, ' ');
+  if (!normalized) {
+    return '';
+  }
+
+  if (!/\bis:(issue|pull-request)\b/i.test(normalized)) {
+    normalized = `${normalized} is:issue`;
+  }
+
+  if (!/\bstate:(open|closed)\b/i.test(normalized)) {
+    normalized = `${normalized} state:open`;
+  }
+
+  return normalized.trim();
+}
+
 function getGithubQueries(): string[] {
   const raw = String(process.env.CRYPTO_GITHUB_QUERIES || '').trim();
   if (!raw) {
@@ -268,7 +285,7 @@ function getGithubQueries(): string[] {
 
   const list = raw
     .split('||')
-    .map((item) => item.trim())
+    .map((item) => normalizeGithubIssueQuery(item))
     .filter(Boolean);
 
   return list.length > 0 ? list : DEFAULT_GITHUB_QUERIES;

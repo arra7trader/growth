@@ -104,6 +104,7 @@ curl -X POST http://localhost:3000/api/track \
 
 - `CRYPTO_GITHUB_QUERIES` untuk override query discovery.
 - `CRYPTO_RSS_FEED_URLS` untuk tambah sumber RSS (dipisah koma).
+- Query GitHub akan ditambah otomatis `is:issue` dan `state:open` jika belum ada.
 - `CRYPTO_STALE_IN_PROGRESS_MINUTES` untuk batas recovery task macet.
 - `CRYPTO_QUEUE_OVERDUE_MINUTES` untuk batas reprioritas queue overdue.
 - `CRYPTO_TASK_RETENTION_DAYS` untuk retensi task selesai/skipped.

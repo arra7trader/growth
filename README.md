@@ -165,6 +165,7 @@ Sistem memantau transfer masuk USDT BEP20 ke wallet payout secara otomatis (tanp
 - Engine memakai multi-query GitHub discovery (bounty/grant/quest/job).
 - Bisa ditambah sumber RSS crypto opportunity via `CRYPTO_RSS_FEED_URLS`.
 - Status jumlah sumber (query/feed) dan antrean executor tersedia di Admin panel.
+- Custom query `CRYPTO_GITHUB_QUERIES` akan dinormalisasi otomatis ke format GitHub Search terbaru (`is:issue`, `state:open` bila belum ada).
 
 ## Crypto Engine Tuning (opsional)
 
