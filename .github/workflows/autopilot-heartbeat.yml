@@ -1,0 +1,31 @@
+name: Autopilot Heartbeat
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  pulse:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send heartbeat pulse to production
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          FALLBACK_URL: https://growth-alpha-sandy.vercel.app
+        run: |
+          set -euo pipefail
+          TARGET_URL="${APP_BASE_URL:-$FALLBACK_URL}"
+          echo "Heartbeat target: $TARGET_URL"
+
+          curl -sS -X POST "$TARGET_URL/api/evolve" \
+            -H "Content-Type: application/json" \
+            -d '{"action":"pulse","source":"github_actions"}' > /tmp/pulse.json || true
+
+          curl -sS "$TARGET_URL/api/evolve" > /tmp/status.json || true
+
+          echo "Pulse response:"
+          cat /tmp/pulse.json || true
+          echo ""
+          echo "Status response:"
+          cat /tmp/status.json || true

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runEvolutionCycle } from '@/lib/brain';
 import tursoClient, { initializeDatabase } from '@/lib/db';
-import { getMonetizationDashboard, initializeAffiliateLinks } from '@/lib/monetization';
+import { getMonetizationDashboard } from '@/lib/monetization';
 import { getOnchainWalletConfig, syncOnchainUsdtPayments } from '@/lib/onchain';
+import { getCryptoEngineStatus, getCryptoOpportunities, runCryptoRevenueCycle } from '@/lib/crypto-engine';
 
 type OperationMode = 'free_manual' | 'free_autonomous';
 
@@ -11,6 +12,7 @@ let autonomousEvolutionPromise: Promise<void> | null = null;
 let pilotEnsurePromise: Promise<void> | null = null;
 let onchainSyncPromise: Promise<void> | null = null;
 let onchainLastSyncMs = 0;
+let cryptoEnginePromise: Promise<void> | null = null;
 
 const SYSTEM_MODE = 'free_real';
 const DEFAULT_OPERATION_MODE: OperationMode = 'free_autonomous';
@@ -18,12 +20,12 @@ const DEFAULT_AUTO_INTERVAL_MINUTES = 180;
 const ADMIN_REPORT_LIMIT = 20;
 const ONCHAIN_SYNC_INTERVAL_MS = 90 * 1000;
 const DEFAULT_PULSE_INTERVAL_SECONDS = 45;
+const DEFAULT_CRYPTO_ENGINE_INTERVAL_MINUTES = 30;
 
 async function ensureSystemInitialized() {
   if (!bootstrapPromise) {
     bootstrapPromise = (async () => {
       await initializeDatabase();
-      await initializeAffiliateLinks();
       await setSetting('operation_mode', DEFAULT_OPERATION_MODE);
     })().catch((error) => {
       bootstrapPromise = null;
@@ -34,6 +36,7 @@ async function ensureSystemInitialized() {
   await bootstrapPromise;
   await ensurePilotAlwaysOn();
   await maybeSyncOnchainPayments();
+  await maybeTriggerCryptoEngine();
 }
 
 function safeDateToISO(value: unknown): string | null {
@@ -84,6 +87,32 @@ async function markAutopilotPulse(source: string) {
   ]);
 }
 
+async function maybeLogAutopilotActivity(source: string) {
+  const lastLogAtValue = await getSetting('autopilot_last_log_at');
+  const now = Date.now();
+  const lastLogAt = lastLogAtValue ? new Date(lastLogAtValue).getTime() : 0;
+
+  if (Number.isFinite(lastLogAt) && now - lastLogAt < 5 * 60 * 1000) {
+    return;
+  }
+
+  await tursoClient.execute({
+    sql: `
+      INSERT INTO logs (level, message, context)
+      VALUES ('autopilot', ?, ?)
+    `,
+    args: [
+      'Autopilot heartbeat is active',
+      JSON.stringify({
+        source,
+        at: new Date(now).toISOString(),
+      }),
+    ],
+  });
+
+  await setSetting('autopilot_last_log_at', new Date(now).toISOString());
+}
+
 async function maybeSyncOnchainPayments() {
   if (onchainSyncPromise) {
     await onchainSyncPromise;
@@ -108,6 +137,47 @@ async function maybeSyncOnchainPayments() {
   await onchainSyncPromise;
 }
 
+function shouldRunByInterval(lastRunAt: string | null, intervalMinutes: number): boolean {
+  if (!lastRunAt) {
+    return true;
+  }
+
+  const last = new Date(lastRunAt).getTime();
+  if (!Number.isFinite(last)) {
+    return true;
+  }
+
+  return Date.now() - last >= intervalMinutes * 60 * 1000;
+}
+
+async function maybeTriggerCryptoEngine() {
+  if (cryptoEnginePromise) {
+    return false;
+  }
+
+  const [status, intervalValue, lastRunAt] = await Promise.all([
+    getSetting('crypto_engine_status'),
+    getSetting('crypto_engine_interval_minutes'),
+    getSetting('crypto_engine_last_run_at'),
+  ]);
+
+  const intervalMinutes = Number(intervalValue || DEFAULT_CRYPTO_ENGINE_INTERVAL_MINUTES) || DEFAULT_CRYPTO_ENGINE_INTERVAL_MINUTES;
+  const isDue = shouldRunByInterval(lastRunAt, intervalMinutes);
+  const isPaused = status === 'paused';
+
+  if (!isDue || isPaused) {
+    return false;
+  }
+
+  cryptoEnginePromise = (async () => {
+    await runCryptoRevenueCycle();
+  })().finally(() => {
+    cryptoEnginePromise = null;
+  });
+
+  return true;
+}
+
 async function getPilotRunnerState() {
   const status = await getSetting('pilot_bot_status');
   const running = status !== 'stopped' && status !== 'attention';
@@ -128,6 +198,8 @@ async function ensurePilotAlwaysOn() {
         await setSetting('autopilot_strategy', 'request_driven');
         await setSetting('autopilot_requires_traffic', 'true');
         await setSetting('autopilot_pulse_interval_seconds', String(DEFAULT_PULSE_INTERVAL_SECONDS));
+        await setSetting('crypto_engine_status', 'running');
+        await setSetting('crypto_engine_interval_minutes', String(DEFAULT_CRYPTO_ENGINE_INTERVAL_MINUTES));
 
         const [status, lastStarted] = await Promise.all([
           getSetting('pilot_bot_status'),
@@ -292,6 +364,7 @@ async function runAutonomousCheck() {
   const autoIntervalMinutes = Number(intervalValue || DEFAULT_AUTO_INTERVAL_MINUTES) || DEFAULT_AUTO_INTERVAL_MINUTES;
   const lastEvolutionAt = safeDateToISO(evolutionResult.rows[0]?.created_at);
   const autoEvolutionTriggered = maybeTriggerAutonomousEvolution(operationMode, autoIntervalMinutes, lastEvolutionAt);
+  const cryptoTriggered = await maybeTriggerCryptoEngine();
   const nextAutoEvolutionAt = lastEvolutionAt
     ? new Date(new Date(lastEvolutionAt).getTime() + autoIntervalMinutes * 60 * 1000).toISOString()
     : new Date(Date.now() + autoIntervalMinutes * 60 * 1000).toISOString();
@@ -302,6 +375,7 @@ async function runAutonomousCheck() {
     lastEvolutionAt,
     nextAutoEvolutionAt,
     autoEvolutionTriggered,
+    cryptoTriggered,
   };
 }
 
@@ -386,6 +460,8 @@ async function getSystemStatus() {
       pilotReports,
       payoutStatus,
       autopilotStatus,
+      cryptoStatus,
+      cryptoOpportunities,
     ] =
       await Promise.all([
         tursoClient.execute({
@@ -411,12 +487,15 @@ async function getSystemStatus() {
         getPilotReports(),
         getPayoutStatus(),
         getAutopilotStatus(),
+        getCryptoEngineStatus(),
+        getCryptoOpportunities(12),
       ]);
 
     const operationMode = DEFAULT_OPERATION_MODE;
     const autoIntervalMinutes = Number(intervalValue || DEFAULT_AUTO_INTERVAL_MINUTES) || DEFAULT_AUTO_INTERVAL_MINUTES;
     const lastEvolutionAt = safeDateToISO(evolutionResult.rows[0]?.created_at);
     const autoEvolutionTriggered = maybeTriggerAutonomousEvolution(operationMode, autoIntervalMinutes, lastEvolutionAt);
+    const cryptoTriggered = await maybeTriggerCryptoEngine();
     const nextAutoEvolutionAt = lastEvolutionAt
       ? new Date(new Date(lastEvolutionAt).getTime() + autoIntervalMinutes * 60 * 1000).toISOString()
       : new Date(Date.now() + autoIntervalMinutes * 60 * 1000).toISOString();
@@ -443,7 +522,10 @@ async function getSystemStatus() {
         pilotReports,
         payoutStatus,
         autopilotStatus,
+        cryptoStatus,
+        cryptoOpportunities,
       },
+      cryptoTriggered,
     };
   } catch (error) {
     return {
@@ -479,7 +561,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'status') {
-      await markAutopilotPulse(sanitizePulseSource(body.source, 'status_post'));
+      const source = sanitizePulseSource(body.source, 'status_post');
+      await markAutopilotPulse(source);
+      await maybeLogAutopilotActivity(source);
       const status = await getSystemStatus();
       return NextResponse.json({
         success: true,
@@ -490,12 +574,15 @@ export async function POST(request: NextRequest) {
     if (action === 'pulse') {
       const source = sanitizePulseSource(body.source, 'browser_heartbeat');
       await markAutopilotPulse(source);
+      await maybeLogAutopilotActivity(source);
 
       const autonomous = await runAutonomousCheck();
-      const [pilotStatus, payoutStatus, autopilotStatus] = await Promise.all([
+      const [pilotStatus, payoutStatus, autopilotStatus, cryptoStatus, cryptoOpportunities] = await Promise.all([
         getPilotStatus(),
         getPayoutStatus(),
         getAutopilotStatus(),
+        getCryptoEngineStatus(),
+        getCryptoOpportunities(8),
       ]);
 
       return NextResponse.json({
@@ -506,6 +593,8 @@ export async function POST(request: NextRequest) {
             pilotStatus,
             payoutStatus,
             autopilotStatus,
+            cryptoStatus,
+            cryptoOpportunities,
           },
         },
       });
@@ -538,6 +627,7 @@ export async function GET() {
   try {
     await ensureSystemInitialized();
     await markAutopilotPulse('status_get');
+    await maybeLogAutopilotActivity('status_get');
     const status = await getSystemStatus();
     return NextResponse.json({
       success: true,

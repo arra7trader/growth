@@ -53,31 +53,31 @@ function getOpenAIClient(): OpenAI | null {
 function fallbackMarketData(): MarketData {
   return {
     trendingTopics: [
-      'ai workflow automation',
-      'small business seo',
-      'affiliate landing pages',
-      'creator monetization tools',
-      'newsletter growth',
+      'crypto bounty opportunities',
+      'web3 grant programs',
+      'bug bounty security reports',
+      'community task rewards',
+      'open source contribution rewards',
     ],
     keywords: [
-      'best ai tools',
-      'automate online business',
-      'saas for solopreneurs',
-      'increase affiliate conversion',
-      'passive income automation',
+      'crypto bounty no capital',
+      'web3 grants open source',
+      'blockchain bug bounty reward',
+      'defi community campaign',
+      'earn usdt online',
     ],
     painPoints: [
-      'high ad costs',
-      'low conversion rates',
-      'slow content production',
-      'manual reporting and analytics',
-      'difficulty finding profitable niches',
+      'high competition in bounty applications',
+      'unclear reward criteria',
+      'slow manual opportunity discovery',
+      'difficulty tracking payout status',
+      'missed deadlines in grant applications',
     ],
     opportunities: [
-      'publish niche comparison pages with affiliate links',
-      'ship lightweight tools with usage-based upsell',
-      'create seo content clusters around high intent keywords',
-      'improve calls to action based on click-through data',
+      'publish technical submissions for bug bounty programs',
+      'build templates to accelerate grant applications',
+      'automate discovery of high-scoring bounty posts',
+      'prioritize no-capital opportunities with fast payout',
     ],
   };
 }
@@ -119,7 +119,7 @@ function buildFallbackDecision(marketData: MarketData, metrics: MetricsSnapshot)
   let priority: EvolutionDecision['priority'] = 'medium';
 
   if (metrics.revenue < 25) {
-    action = 'add_affiliate';
+    action = 'create_content';
     priority = 'high';
   } else if (metrics.traffic < 300) {
     action = 'create_content';
@@ -137,11 +137,11 @@ function buildFallbackDecision(marketData: MarketData, metrics: MetricsSnapshot)
 
   return {
     action,
-    reasoning: `Rule-based strategy selected "${action}" because traffic=${metrics.traffic}, revenue=${metrics.revenue}, conversionRate=${metrics.conversionRate}.`,
+    reasoning: `Crypto no-capital strategy selected "${action}" because traffic=${metrics.traffic}, revenue=${metrics.revenue}, conversionRate=${metrics.conversionRate}.`,
     priority,
     expectedImpact: {
       traffic: action === 'create_content' || action === 'optimize_seo' ? 12 : 6,
-      revenue: action === 'add_affiliate' || action === 'add_feature' ? 14 : 8,
+      revenue: action === 'add_feature' ? 14 : 8,
       userExperience: 8,
     },
     implementation: {
@@ -285,7 +285,8 @@ export async function makeEvolutionDecision(marketData: MarketData): Promise<Evo
       - Active features: ${metrics.activeFeatures}
       - Conversion rate: ${metrics.conversionRate}
 
-      Pick one action: create_content, add_feature, optimize_seo, add_affiliate, fix_bug.
+      Objective: no-capital crypto revenue growth (bounty/grant/quest pipeline), avoid affiliate-first tactics.
+      Pick one action: create_content, add_feature, optimize_seo, fix_bug.
       Return valid JSON matching EvolutionDecision including implementation fields.
     `;
 
@@ -295,7 +296,7 @@ export async function makeEvolutionDecision(marketData: MarketData): Promise<Evo
         {
           role: 'system',
           content:
-            'You are a growth engineer. Choose practical actions that improve traffic and revenue for a bootstrapped SaaS.',
+            'You are a crypto growth engineer. Focus on no-capital opportunities (bounties, grants, quests) and practical execution.',
         },
         {
           role: 'user',

@@ -115,6 +115,28 @@ interface AdminAutopilotStatus {
   lastPulseSource: string | null;
 }
 
+interface AdminCryptoStatus {
+  status: string;
+  intervalMinutes: number;
+  lastRunAt: string | null;
+  lastError: string | null;
+  lastTotal: number;
+  lastNew: number;
+}
+
+interface AdminCryptoOpportunity {
+  key: string;
+  source?: string;
+  category?: string;
+  title?: string;
+  url?: string;
+  summary?: string;
+  tags?: string[];
+  rewardEstimateUsd?: number;
+  score?: number;
+  updatedAt?: string | null;
+}
+
 interface SystemStatus {
   lastActivity: string | null;
   recentLogs: Log[];
@@ -134,6 +156,7 @@ interface SystemStatus {
   operationMode: OperationMode;
   autoIntervalMinutes: number;
   autoEvolutionTriggered: boolean;
+  cryptoTriggered?: boolean;
   lastEvolutionAt: string | null;
   nextAutoEvolutionAt: string | null;
   admin?: {
@@ -141,6 +164,8 @@ interface SystemStatus {
     pilotReports: AdminPilotReport[];
     payoutStatus?: AdminPayoutStatus;
     autopilotStatus?: AdminAutopilotStatus;
+    cryptoStatus?: AdminCryptoStatus;
+    cryptoOpportunities?: AdminCryptoOpportunity[];
   };
 }
 
@@ -713,6 +738,8 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
   const isPilotRunning = Boolean(pilotStatus.runner?.running);
   const payoutStatus = admin.payoutStatus;
   const autopilotStatus = admin.autopilotStatus;
+  const cryptoStatus = admin.cryptoStatus;
+  const cryptoOpportunities = admin.cryptoOpportunities || [];
 
   return (
     <div className="space-y-6">
@@ -770,6 +797,60 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
                 On-chain sync issue: {payoutStatus.lastError}
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-card/70 rounded-xl border border-border p-6">
+        <h2 className="text-lg font-semibold mb-4">Crypto Revenue Engine</h2>
+        {!cryptoStatus && <p className="text-sm text-muted-foreground">Crypto engine status not available yet.</p>}
+        {cryptoStatus && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <InfoBox label="Engine Status" value={cryptoStatus.status || 'unknown'} accent="primary" />
+              <InfoBox label="Interval" value={`${safeNumber(cryptoStatus.intervalMinutes)}m`} />
+              <InfoBox label="Last Run" value={formatRelativeTime(cryptoStatus.lastRunAt)} />
+              <InfoBox label="New / Last Cycle" value={`${safeNumber(cryptoStatus.lastNew)} / ${safeNumber(cryptoStatus.lastTotal)}`} />
+            </div>
+            {cryptoStatus.lastError && (
+              <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+                Crypto engine issue: {cryptoStatus.lastError}
+              </div>
+            )}
+            <div className="space-y-2">
+              {cryptoOpportunities.length === 0 && (
+                <p className="text-sm text-muted-foreground">No crypto opportunities indexed yet.</p>
+              )}
+              {cryptoOpportunities.slice(0, 6).map((opportunity) => (
+                <div key={String(opportunity.key)} className="rounded-lg border border-border/70 p-3">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 rounded text-xs bg-primary/20 text-primary">
+                      {String(opportunity.category || 'opportunity')}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-xs bg-success/20 text-success">
+                      score: {safeNumber(opportunity.score)}
+                    </span>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {formatRelativeTime(opportunity.updatedAt || null)}
+                    </span>
+                  </div>
+                  <p className="text-sm font-medium">{String(opportunity.title || 'Untitled')}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Est. reward: {formatCurrency(opportunity.rewardEstimateUsd)} | Source: {String(opportunity.source || 'n/a')}
+                  </p>
+                  {opportunity.url && (
+                    <a
+                      href={String(opportunity.url)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-primary hover:underline mt-1 inline-block break-all"
+                    >
+                      {String(opportunity.url)}
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

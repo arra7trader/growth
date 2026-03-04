@@ -6,7 +6,7 @@ Autonomous web app that is **100% free** and focused on growing revenue by itsel
 
 - Full free stack by default (optional paid integrations if you choose)
 - Continuous self-evolution
-- Monetization-first metrics (traffic, affiliate revenue, SaaS revenue)
+- Monetization-first metrics (traffic + crypto revenue + SaaS revenue)
 
 ## What it does
 
@@ -15,6 +15,7 @@ Autonomous web app that is **100% free** and focused on growing revenue by itsel
 - Tracks monetization results in database
 - Shows real revenue/traffic trend in dashboard
 - Uses fixed always-on mode: `free_autonomous`
+- Runs a crypto opportunity engine focused on no-capital pathways (bounty/grant/quest/job)
 
 ## Stack
 
@@ -109,6 +110,7 @@ Actions:
 - `{"action":"evolve"}`
 - `{"action":"status"}`
 - `{"action":"logs"}`
+- `{"action":"pulse","source":"browser_heartbeat"}`
 
 ### `POST /api/track`
 
@@ -132,6 +134,12 @@ Sistem memantau transfer masuk USDT BEP20 ke wallet payout secara otomatis (tanp
 - Mode autopilot dikunci ke `request_driven` (gratis, tanpa cron).
 - Browser dashboard mengirim heartbeat berkala (`pulse`) untuk menjaga siklus otomatis tetap jalan.
 - Tanpa traffic/event sama sekali, serverless tidak akan terus aktif 24/7.
+
+## Zero-Click Heartbeat (Free)
+
+- Repository ini menyertakan workflow: `.github/workflows/autopilot-heartbeat.yml`.
+- Workflow mem-pulse production otomatis tiap 15 menit (gratis via GitHub Actions).
+- Set repo variable `APP_BASE_URL` bila domain production Anda berbeda.
 
 ## Scripts
 

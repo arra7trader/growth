@@ -79,6 +79,12 @@ curl -X POST http://localhost:3000/api/track \
 - Sistem pakai mode `request_driven` (tanpa cron).
 - Dashboard browser kirim heartbeat otomatis agar autopilot tetap berjalan saat ada traffic.
 
+## Zero-click mode (recommended)
+
+- GitHub Actions heartbeat sudah tersedia di:
+  - `.github/workflows/autopilot-heartbeat.yml`
+- Workflow ini mengirim pulse otomatis tiap 15 menit agar sistem tetap aktif tanpa klik dari Anda.
+
 Expect:
 
 - `success: true`
