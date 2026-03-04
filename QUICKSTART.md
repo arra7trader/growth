@@ -13,10 +13,10 @@ npm install
 cp .env.example .env.local
 ```
 
-Default env already ready for free mode:
+Default env gratis dan siap untuk mode real data:
 
 ```bash
-AETHER_FREE_MODE=true
+AETHER_REAL_MODE=true
 TURSO_DATABASE_URL=file:local.db
 ```
 
@@ -29,9 +29,6 @@ npm run dev
 Open `http://localhost:3000`.
 
 ## 4. Make it evolve
-
-- Click `Trigger Evolution`
-- Or run:
 
 ```bash
 npm run evolve
@@ -63,9 +60,17 @@ Report output:
 curl http://localhost:3000/api/evolve
 ```
 
+## Real tracking check
+
+```bash
+curl -X POST http://localhost:3000/api/track \
+  -H "Content-Type: application/json" \
+  -d "{\"eventType\":\"page_view\",\"value\":1,\"source\":\"quickstart\"}"
+```
+
 Expect:
 
 - `success: true`
 - `systemHealth: operational`
-- `systemMode: free`
+- `systemMode: free_real`
 - `operationMode: free_autonomous` (default)

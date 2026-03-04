@@ -1,7 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import tursoClient from './db';
 
-const FREE_MODE = true;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GITHUB_OWNER = process.env.GITHUB_OWNER || 'arra7trader';
 const GITHUB_REPO = process.env.GITHUB_REPO || 'growth';
@@ -24,14 +23,14 @@ export interface EvolutionProposal {
 
 function getOctokit(): Octokit {
   if (!octokit) {
-    throw new Error('GitHub token not configured. Set GITHUB_TOKEN or use free mode.');
+    throw new Error('GitHub token not configured. Set GITHUB_TOKEN for direct repository updates.');
   }
 
   return octokit;
 }
 
 function shouldUseLocalExecution(): boolean {
-  return FREE_MODE || !GITHUB_TOKEN;
+  return !GITHUB_TOKEN;
 }
 
 export async function getFileContent(filePath: string): Promise<{ content: string; sha: string } | null> {
@@ -214,15 +213,15 @@ async function storeLocalGeneratedContent(proposal: EvolutionProposal) {
         ) VALUES (?, ?, ?, ?)
       `,
       args: [
-        'local_evolution',
-        `local_evolution_${Date.now()}`,
+        'evolution_record',
+        `evolution_record_${Date.now()}`,
         JSON.stringify({
           title: proposal.title,
           description: proposal.description,
           files: proposal.files,
         }),
         JSON.stringify({
-          mode: 'free_local',
+          mode: 'local_execution',
           priority: proposal.priority,
           generatedAt: new Date().toISOString(),
         }),
@@ -243,11 +242,11 @@ export async function executeEvolution(proposal: EvolutionProposal): Promise<{
 
   if (shouldUseLocalExecution()) {
     await storeLocalGeneratedContent(proposal);
-    await logEvolution(proposal, 'simulated_local');
+    await logEvolution(proposal, 'local_recorded');
 
     return {
       success: true,
-      url: `local-evolution://${timestamp}`,
+      url: `internal://evolution/${timestamp}`,
     };
   }
 

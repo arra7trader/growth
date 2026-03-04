@@ -111,7 +111,7 @@ interface SystemStatus {
   activeContent: unknown[];
   monetization: MonetizationData;
   systemHealth: string;
-  systemMode: 'free';
+  systemMode: string;
   operationMode: OperationMode;
   autoIntervalMinutes: number;
   autoEvolutionTriggered: boolean;
@@ -158,6 +158,21 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function ensureSessionId(): string {
+  if (typeof window === 'undefined') {
+    return 'server-session';
+  }
+
+  const existing = window.sessionStorage.getItem('aether_session_id');
+  if (existing) {
+    return existing;
+  }
+
+  const sessionId = `sid_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  window.sessionStorage.setItem('aether_session_id', sessionId);
+  return sessionId;
+}
+
 export default function Home() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -166,6 +181,22 @@ export default function Home() {
 
   useEffect(() => {
     void fetchStatus();
+    void fetch('/api/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: 'page_view',
+        value: 1,
+        source: 'dashboard',
+        sessionId: ensureSessionId(),
+        metadata: {
+          page: 'home',
+        },
+      }),
+    }).catch(() => {
+      // Tracking is best-effort and must not break UI.
+    });
+
     const interval = setInterval(() => void fetchStatus(), 10000);
     return () => clearInterval(interval);
   }, []);

@@ -2,7 +2,6 @@ import OpenAI from 'openai';
 import tursoClient from './db';
 import { executeEvolution, EvolutionProposal } from './github';
 
-const FREE_MODE = true;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 let openaiClient: OpenAI | null = null;
@@ -34,7 +33,7 @@ interface MetricsSnapshot {
 }
 
 function canUseOpenAI(): boolean {
-  return !FREE_MODE && Boolean(process.env.OPENAI_API_KEY);
+  return Boolean(process.env.OPENAI_API_KEY);
 }
 
 function getOpenAIClient(): OpenAI | null {
@@ -138,7 +137,7 @@ function buildFallbackDecision(marketData: MarketData, metrics: MetricsSnapshot)
 
   return {
     action,
-    reasoning: `Free-mode strategy selected "${action}" because traffic=${metrics.traffic}, revenue=${metrics.revenue}, conversionRate=${metrics.conversionRate}.`,
+    reasoning: `Rule-based strategy selected "${action}" because traffic=${metrics.traffic}, revenue=${metrics.revenue}, conversionRate=${metrics.conversionRate}.`,
     priority,
     expectedImpact: {
       traffic: action === 'create_content' || action === 'optimize_seo' ? 12 : 6,
@@ -214,7 +213,7 @@ export async function scrapeMarketData(): Promise<MarketData> {
   const fallback = fallbackMarketData();
 
   if (!client) {
-    await logActivity('market_research', 'Using local market data fallback (free mode)', fallback);
+    await logActivity('market_research', 'Using local market data fallback (OPENAI_API_KEY not set)', fallback);
     return fallback;
   }
 
@@ -268,7 +267,7 @@ export async function makeEvolutionDecision(marketData: MarketData): Promise<Evo
   const client = getOpenAIClient();
 
   if (!client) {
-    await logActivity('decision', 'Using local decision engine (free mode)', fallback);
+    await logActivity('decision', 'Using local decision engine (OPENAI_API_KEY not set)', fallback);
     return fallback;
   }
 
@@ -359,7 +358,7 @@ async function getCurrentMetrics(): Promise<MetricsSnapshot> {
     });
 
     const featuresResult = await tursoClient.execute({
-      sql: 'SELECT COUNT(*) as feature_count FROM dynamic_content WHERE content_type IN ("feature", "locked_feature", "local_evolution") AND is_active = 1',
+      sql: 'SELECT COUNT(*) as feature_count FROM dynamic_content WHERE content_type IN ("feature", "locked_feature") AND is_active = 1',
       args: [],
     });
 
@@ -369,18 +368,18 @@ async function getCurrentMetrics(): Promise<MetricsSnapshot> {
     });
 
     return {
-      traffic: Math.round(Number(trafficResult.rows[0]?.avg_traffic) || 100),
+      traffic: Math.round(Number(trafficResult.rows[0]?.avg_traffic) || 0),
       revenue: Math.round(Number(revenueResult.rows[0]?.total_revenue) || 0),
-      activeFeatures: Number(featuresResult.rows[0]?.feature_count) || 1,
-      conversionRate: Number(ctrResult.rows[0]?.avg_ctr) ? Number(ctrResult.rows[0]?.avg_ctr) * 100 : 2.5,
+      activeFeatures: Number(featuresResult.rows[0]?.feature_count) || 0,
+      conversionRate: Number(ctrResult.rows[0]?.avg_ctr) ? Number(ctrResult.rows[0]?.avg_ctr) * 100 : 0,
     };
   } catch (error) {
-    await logActivity('warn', 'Failed to read metrics, using defaults', { error: String(error) });
+    await logActivity('warn', 'Failed to read metrics, using safe zero defaults', { error: String(error) });
     return {
-      traffic: 100,
+      traffic: 0,
       revenue: 0,
-      activeFeatures: 1,
-      conversionRate: 2.5,
+      activeFeatures: 0,
+      conversionRate: 0,
     };
   }
 }
@@ -399,37 +398,72 @@ async function logActivity(type: string, message: string, context: unknown) {
   }
 }
 
-function calculateDailyMetrics(decision: EvolutionDecision, marketData: MarketData) {
-  const impactTraffic = decision.expectedImpact.traffic || 8;
-  const impactRevenue = decision.expectedImpact.revenue || 8;
-  const baseTraffic = 150 + Math.floor(Math.random() * 150);
-  const topicBoost = Math.max(4, marketData.trendingTopics.length * 2);
-  const visitors = baseTraffic + impactTraffic * 10 + topicBoost;
+async function aggregateTrackingMetrics() {
+  const [viewsResult, affiliateClicksResult, affiliateSalesResult, saasSalesResult] = await Promise.all([
+    tursoClient.execute({
+      sql: `
+        SELECT COALESCE(COUNT(*), 0) AS value
+        FROM tracking_events
+        WHERE event_type = 'page_view'
+          AND created_at >= datetime('now', '-1 day')
+      `,
+      args: [],
+    }),
+    tursoClient.execute({
+      sql: `
+        SELECT COALESCE(COUNT(*), 0) AS value
+        FROM tracking_events
+        WHERE event_type = 'affiliate_click'
+          AND created_at >= datetime('now', '-1 day')
+      `,
+      args: [],
+    }),
+    tursoClient.execute({
+      sql: `
+        SELECT COALESCE(SUM(value), 0) AS value
+        FROM tracking_events
+        WHERE event_type = 'affiliate_sale'
+          AND created_at >= datetime('now', '-1 day')
+      `,
+      args: [],
+    }),
+    tursoClient.execute({
+      sql: `
+        SELECT COALESCE(SUM(value), 0) AS value
+        FROM tracking_events
+        WHERE event_type = 'saas_sale'
+          AND created_at >= datetime('now', '-1 day')
+      `,
+      args: [],
+    }),
+  ]);
 
-  const ctr = Math.min(0.12, 0.02 + impactRevenue / 250 + Math.random() * 0.02);
-  const affiliateRevenue = Number((visitors * ctr * (0.35 + Math.random() * 0.25)).toFixed(2));
-  const saasRevenue = Number((decision.action === 'add_feature' ? affiliateRevenue * 0.3 : affiliateRevenue * 0.1).toFixed(2));
+  const visitors = Number(viewsResult.rows[0]?.value) || 0;
+  const affiliateClicks = Number(affiliateClicksResult.rows[0]?.value) || 0;
+  const affiliateRevenue = Number(affiliateSalesResult.rows[0]?.value) || 0;
+  const saasRevenue = Number(saasSalesResult.rows[0]?.value) || 0;
   const totalRevenue = Number((affiliateRevenue + saasRevenue).toFixed(2));
+  const ctr = visitors > 0 ? Number((affiliateClicks / visitors).toFixed(6)) : 0;
 
   return {
     visitors,
     ctr,
-    affiliateRevenue,
-    saasRevenue,
+    affiliateRevenue: Number(affiliateRevenue.toFixed(2)),
+    saasRevenue: Number(saasRevenue.toFixed(2)),
     totalRevenue,
   };
 }
 
-async function updateGrowthMetrics(decision: EvolutionDecision, marketData: MarketData) {
+async function updateGrowthMetrics(decision: EvolutionDecision) {
   try {
-    const metrics = calculateDailyMetrics(decision, marketData);
+    const metrics = await aggregateTrackingMetrics();
 
     await tursoClient.execute({
       sql: `
         INSERT INTO growth_metrics (metric_type, metric_name, value, unit, metadata)
         VALUES ('traffic', 'daily_visitors', ?, 'visitors', ?)
       `,
-      args: [metrics.visitors, JSON.stringify({ source: 'evolution_engine', action: decision.action })],
+      args: [metrics.visitors, JSON.stringify({ source: 'tracking_events', action: decision.action, realData: true })],
     });
 
     await tursoClient.execute({
@@ -437,7 +471,7 @@ async function updateGrowthMetrics(decision: EvolutionDecision, marketData: Mark
         INSERT INTO growth_metrics (metric_type, metric_name, value, unit, metadata)
         VALUES ('ctr', 'affiliate_ctr', ?, 'ratio', ?)
       `,
-      args: [metrics.ctr, JSON.stringify({ source: 'affiliate_engine', action: decision.action })],
+      args: [metrics.ctr, JSON.stringify({ source: 'tracking_events', action: decision.action, realData: true })],
     });
 
     await tursoClient.execute({
@@ -445,7 +479,7 @@ async function updateGrowthMetrics(decision: EvolutionDecision, marketData: Mark
         INSERT INTO growth_metrics (metric_type, metric_name, value, unit, metadata)
         VALUES ('affiliate_revenue', 'daily_affiliate_revenue', ?, 'USD', ?)
       `,
-      args: [metrics.affiliateRevenue, JSON.stringify({ source: 'affiliate_engine' })],
+      args: [metrics.affiliateRevenue, JSON.stringify({ source: 'tracking_events', realData: true })],
     });
 
     await tursoClient.execute({
@@ -453,7 +487,7 @@ async function updateGrowthMetrics(decision: EvolutionDecision, marketData: Mark
         INSERT INTO growth_metrics (metric_type, metric_name, value, unit, metadata)
         VALUES ('saas_revenue', 'daily_saas_revenue', ?, 'USD', ?)
       `,
-      args: [metrics.saasRevenue, JSON.stringify({ source: 'micro_saas_engine' })],
+      args: [metrics.saasRevenue, JSON.stringify({ source: 'tracking_events', realData: true })],
     });
 
     await tursoClient.execute({
@@ -461,7 +495,7 @@ async function updateGrowthMetrics(decision: EvolutionDecision, marketData: Mark
         INSERT INTO growth_metrics (metric_type, metric_name, value, unit, metadata)
         VALUES ('revenue', 'daily_revenue', ?, 'USD', ?)
       `,
-      args: [metrics.totalRevenue, JSON.stringify({ source: 'monetization_engine' })],
+      args: [metrics.totalRevenue, JSON.stringify({ source: 'tracking_events', realData: true })],
     });
   } catch (error) {
     console.error('Failed to update metrics:', error);
@@ -482,7 +516,7 @@ export async function runEvolutionCycle() {
     const result = await executeEvolutionDecision(decision);
 
     console.log('Phase 4: metrics update');
-    await updateGrowthMetrics(decision, marketData);
+    await updateGrowthMetrics(decision);
 
     console.log('Evolution cycle complete');
     return result;

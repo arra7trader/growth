@@ -244,7 +244,8 @@ async function getKpiSnapshot(): Promise<KpiSnapshot> {
     queryScalarNumber(
       `SELECT COALESCE(COUNT(*), 0) AS value
        FROM dynamic_content
-       WHERE is_active = 1`
+       WHERE content_type IN ('feature', 'locked_feature')
+       AND is_active = 1`
     ),
     queryScalarNumber(
       `SELECT COALESCE(COUNT(*), 0) AS value

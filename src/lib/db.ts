@@ -91,6 +91,19 @@ export async function initializeDatabase() {
       )
     `);
 
+    // Create tracking events table (real traffic/revenue source of truth)
+    await tursoClient.execute(`
+      CREATE TABLE IF NOT EXISTS tracking_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT NOT NULL,
+        value REAL DEFAULT 0,
+        session_id TEXT,
+        source TEXT,
+        metadata TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Default operation mode: full free autonomous
     await tursoClient.execute({
       sql: `

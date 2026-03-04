@@ -237,25 +237,35 @@ export async function getMonetizationDashboard() {
  */
 export async function initializeAffiliateLinks() {
   try {
-    const defaultAffiliates = [
-      { keyword: 'ai tools', affiliateUrl: 'https://affiliate.example.com/ai-tools', conversionRate: 0.03 },
-      { keyword: 'saas', affiliateUrl: 'https://affiliate.example.com/saas', conversionRate: 0.025 },
-      { keyword: 'passive income', affiliateUrl: 'https://affiliate.example.com/passive-income', conversionRate: 0.04 },
-      { keyword: 'automation', affiliateUrl: 'https://affiliate.example.com/automation', conversionRate: 0.035 },
-      { keyword: 'trading', affiliateUrl: 'https://affiliate.example.com/trading', conversionRate: 0.05 },
-    ];
+    const configured = process.env.AFFILIATE_LINKS_JSON;
+    if (!configured) {
+      console.log('Affiliate links not configured (AFFILIATE_LINKS_JSON empty).');
+      return;
+    }
 
-    for (const affiliate of defaultAffiliates) {
+    let links: Array<{ keyword: string; affiliateUrl: string; conversionRate?: number }> = [];
+    try {
+      links = JSON.parse(configured);
+    } catch (error) {
+      console.error('Invalid AFFILIATE_LINKS_JSON:', error);
+      return;
+    }
+
+    for (const affiliate of links) {
+      if (!affiliate.keyword || !affiliate.affiliateUrl || !affiliate.affiliateUrl.startsWith('http')) {
+        continue;
+      }
+
       await tursoClient.execute({
         sql: `
           INSERT OR IGNORE INTO affiliate_links (keyword, affiliate_url, conversion_rate)
           VALUES (?, ?, ?)
         `,
-        args: [affiliate.keyword, affiliate.affiliateUrl, affiliate.conversionRate],
+        args: [affiliate.keyword, affiliate.affiliateUrl, Number(affiliate.conversionRate) || 0],
       });
     }
 
-    console.log('Affiliate links initialized');
+    console.log('Affiliate links initialized from AFFILIATE_LINKS_JSON');
   } catch (error) {
     console.error('Failed to initialize affiliate links:', error);
   }

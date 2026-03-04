@@ -9,7 +9,7 @@ let bootstrapPromise: Promise<void> | null = null;
 let autonomousEvolutionPromise: Promise<void> | null = null;
 let pilotEnsurePromise: Promise<void> | null = null;
 
-const SYSTEM_MODE = 'free';
+const SYSTEM_MODE = 'free_real';
 const DEFAULT_OPERATION_MODE: OperationMode = 'free_autonomous';
 const DEFAULT_AUTO_INTERVAL_MINUTES = 180;
 const ADMIN_REPORT_LIMIT = 20;

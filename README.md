@@ -4,7 +4,7 @@ Autonomous web app that is **100% free** and focused on growing revenue by itsel
 
 ## Principles
 
-- Full free stack only (no paid APIs)
+- Full free stack by default (optional paid integrations if you choose)
 - Continuous self-evolution
 - Monetization-first metrics (traffic, affiliate revenue, SaaS revenue)
 
@@ -34,8 +34,7 @@ Open: `http://localhost:3000`
 
 ## Evolution controls
 
-- Dashboard:
-  - `Trigger Evolution` button
+- Dashboard mode: always-on autopilot (no manual start/stop)
 - CLI:
 
 ```bash
@@ -82,6 +81,14 @@ curl -X POST http://localhost:3000/api/evolve \
   -d '{"action":"evolve"}'
 ```
 
+- API tracking event real:
+
+```bash
+curl -X POST http://localhost:3000/api/track \
+  -H "Content-Type: application/json" \
+  -d '{"eventType":"page_view","value":1,"source":"landing"}'
+```
+
 ## API
 
 ### `GET /api/evolve`
@@ -89,7 +96,7 @@ curl -X POST http://localhost:3000/api/evolve \
 Returns:
 
 - `systemHealth`
-- `systemMode` (`free`)
+- `systemMode` (`free_real`)
 - `operationMode` (`free_autonomous`)
 - logs, metrics, evolution history
 - monetization summary + 14-day revenue trend
@@ -102,6 +109,15 @@ Actions:
 - `{"action":"evolve"}`
 - `{"action":"status"}`
 - `{"action":"logs"}`
+
+### `POST /api/track`
+
+Untuk data real (bukan simulasi). Event yang didukung:
+
+- `page_view`
+- `affiliate_click`
+- `affiliate_sale`
+- `saas_sale`
 
 ## Scripts
 
