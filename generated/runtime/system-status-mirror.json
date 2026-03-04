@@ -1,22 +1,22 @@
 {
-  "snapshotAt": "2026-03-04T21:27:46.564Z",
+  "snapshotAt": "2026-03-04T21:27:47.078Z",
   "source": "api_evolve_status",
-  "fingerprint": "1444fef96383ba7edc5b09503e60c2805edf5011",
+  "fingerprint": "84d30eea83398ee1909ab69d608c2d06494ff403",
   "data": {
-    "capturedAt": "2026-03-04T21:27:46.563Z",
+    "capturedAt": "2026-03-04T21:27:47.078Z",
     "systemHealth": "operational",
     "systemMode": "free_real",
     "operationMode": "free_autonomous",
     "lastActivity": "2026-03-04T21:27:46.000Z",
     "lastEvolutionAt": null,
-    "nextAutoEvolutionAt": "2026-03-05T00:27:46.462Z",
+    "nextAutoEvolutionAt": "2026-03-05T00:27:47.008Z",
     "cryptoTriggered": true,
     "admin": {
       "pilotStatus": {
         "status": "running",
-        "lastStartedAt": "2026-03-04T21:27:44.163Z",
+        "lastStartedAt": "2026-03-04T21:27:44.177Z",
         "lastFinishedAt": null,
-        "lastHeartbeatAt": "2026-03-04T21:27:44.165Z",
+        "lastHeartbeatAt": "2026-03-04T21:27:44.180Z",
         "lastError": null,
         "runner": {
           "running": true,
@@ -31,7 +31,7 @@
         "tokenSymbol": "USDT",
         "tokenContract": "0x55d398326f99059fF775485246999027B3197955",
         "configured": true,
-        "lastSyncedAt": "2026-03-04T21:27:44.352Z",
+        "lastSyncedAt": "2026-03-04T21:27:44.388Z",
         "lastScannedBlock": 84696827,
         "lastError": null
       },
@@ -39,19 +39,19 @@
         "strategy": "request_driven",
         "requiresTraffic": true,
         "pulseIntervalSeconds": 45,
-        "lastPulseAt": "2026-03-04T21:27:44.360Z",
+        "lastPulseAt": "2026-03-04T21:27:44.392Z",
         "lastPulseSource": "browser_heartbeat"
       },
       "cryptoStatus": {
         "status": "running",
         "intervalMinutes": 30,
-        "lastRunAt": "2026-03-04T21:27:46.439Z",
+        "lastRunAt": "2026-03-04T21:27:46.982Z",
         "lastError": null,
         "lastTotal": 40,
         "lastNew": 40,
         "lastActions": 12,
         "executor": {
-          "lastRunAt": "2026-03-04T21:27:46.417Z",
+          "lastRunAt": "2026-03-04T21:27:46.954Z",
           "lastProcessed": 8,
           "lastSubmitted": 0,
           "lastPrepared": 0,
@@ -78,7 +78,7 @@
           "usedStoredFallback": false
         },
         "maintenance": {
-          "lastRunAt": "2026-03-04T21:27:46.421Z",
+          "lastRunAt": "2026-03-04T21:27:46.959Z",
           "recoveredInProgress": 0,
           "reprioritizedQueued": 0,
           "prunedTasks": 0,
@@ -92,7 +92,7 @@
         },
         "cycleHistory": [
           {
-            "at": "2026-03-04T21:27:46.439Z",
+            "at": "2026-03-04T21:27:46.982Z",
             "total": 40,
             "newItems": 40,
             "actionItems": 12,
@@ -128,7 +128,7 @@
         ],
         "cycleHistoryLimit": 36,
         "submissionMonitor": {
-          "lastRunAt": "2026-03-04T21:27:46.433Z",
+          "lastRunAt": "2026-03-04T21:27:46.976Z",
           "intervalMinutes": 20,
           "limit": 24,
           "checked": 0,
@@ -573,203 +573,8 @@
       ],
       "cryptoActionTasks": [
         {
-          "key": "action_crypto_46fa816e99ca9e55a089",
-          "updatedAt": "2026-03-04T21:27:46.072Z",
-          "opportunityKey": "crypto_46fa816e99ca9e55a089",
-          "title": "Execute grant: [Case Study] Gitcoin Citizens Round 1: Retroactive Quadratic Funding for Community Contributions",
-          "status": "queued",
-          "priority": "high",
-          "category": "grant",
-          "score": 100,
-          "rewardEstimateUsd": 500000,
-          "targetUrl": "https://github.com/gitcoinco/gitcoin_co_30/issues/41",
-          "dueAt": "2026-03-05T03:27:45.733Z",
-          "runbook": {
-            "objective": "Submit a high-quality grant response for: [Case Study] Gitcoin Citizens Round 1: Retroactive Quadratic Funding for Community Contributions",
-            "steps": [
-              "Read full opportunity brief and acceptance criteria.",
-              "Extract hard requirements and submission deadline.",
-              "Confirm payout signal and submit-path signal. Monetization readiness: payable=true, submission_path=true, automation=true, confidence=100",
-              "Produce concise technical proposal aligned to requirements.",
-              "Prepare proof artifacts (links, screenshots, code references).",
-              "Submit through official channel and log submission reference."
-            ],
-            "submissionDraft": "Title: [Case Study] Gitcoin Citizens Round 1: Retroactive Quadratic Funding for Community Contributions\n\nSummary:\n<!-- IMPORTANT: This template is automatically parsed by a script to generate content files. - Fill in all metadata fields below — do NOT rename or remove the field labels (e.g. \"Short Description\", \"Tags\"). - The bold field names (e.g. **S\n\nExecution Plan:\n- Scope: Deliver requirements exactly as requested.\n- Approach: Prioritize high-impact items with clear proof.\n- Deliverables: Structured report + references + evidence.\n\nWhy this submission should win:\n- Directly aligned to success criteria.\n- Fast execution timeline with verification-ready output.\n- Risk controls and clear communication.\n- Readiness confidence: 100/100.\n\nPayout signals: reward, compensation, grant, dai, token\nSubmission signals: apply, application, submission\n\nTarget URL: https://github.com/gitcoinco/gitcoin_co_30/issues/41"
-          },
-          "execution": {
-            "attempts": 1,
-            "lastAttemptAt": "2026-03-04T21:27:46.072Z",
-            "nextAttemptAt": "2026-03-04T21:32:46.072Z",
-            "lastResult": "failed",
-            "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
-          },
-          "submission": {
-            "channel": "github_issue_comment",
-            "state": "failed",
-            "externalUrl": null,
-            "submissionKey": "submission_action_crypto_46fa816e99ca9e55a089_1772659665990",
-            "submittedAt": "2026-03-04T21:27:46.072Z"
-          }
-        },
-        {
-          "key": "action_crypto_1720558e5b7cfca04e5b",
-          "updatedAt": "2026-03-04T21:27:46.157Z",
-          "opportunityKey": "crypto_1720558e5b7cfca04e5b",
-          "title": "Execute job: [每日信息流] 2023-12-12",
-          "status": "queued",
-          "priority": "high",
-          "category": "job",
-          "score": 100,
-          "rewardEstimateUsd": 480000,
-          "targetUrl": "https://github.com/BruceFeIix/picker/issues/708",
-          "dueAt": "2026-03-05T03:27:45.734Z",
-          "runbook": {
-            "objective": "Submit a high-quality job response for: [每日信息流] 2023-12-12",
-            "steps": [
-              "Read full opportunity brief and acceptance criteria.",
-              "Extract hard requirements and submission deadline.",
-              "Confirm payout signal and submit-path signal. Monetization readiness: payable=true, submission_path=true, automation=true, confidence=83",
-              "Produce concise technical proposal aligned to requirements.",
-              "Prepare proof artifacts (links, screenshots, code references).",
-              "Submit through official channel and log submission reference."
-            ],
-            "submissionDraft": "Title: [每日信息流] 2023-12-12\n\nSummary:\n# 每日安全资讯（2023-12-12） - SecWiki News - [ ] [SecWiki News 2023-12-11 Review](http://www.sec-wiki.com/?2023-12-11) - Sploitus.com Exploits RSS Feed - [ ] [WordPress TextMe SMS 1.9.0 Cross Site Request Forgery exploit](https://sploitus.com/expl\n\nExecution Plan:\n- Scope: Deliver requirements exactly as requested.\n- Approach: Prioritize high-impact items with clear proof.\n- Deliverables: Structured report + references + evidence.\n\nWhy this submission should win:\n- Directly aligned to success criteria.\n- Fast execution timeline with verification-ready output.\n- Risk controls and clear communication.\n- Readiness confidence: 83/100.\n\nPayout signals: bounty\nSubmission signals: form, issue, application\n\nTarget URL: https://github.com/BruceFeIix/picker/issues/708"
-          },
-          "execution": {
-            "attempts": 1,
-            "lastAttemptAt": "2026-03-04T21:27:46.157Z",
-            "nextAttemptAt": "2026-03-04T21:32:46.157Z",
-            "lastResult": "failed",
-            "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
-          },
-          "submission": {
-            "channel": "github_issue_comment",
-            "state": "failed",
-            "externalUrl": null,
-            "submissionKey": "submission_action_crypto_1720558e5b7cfca04e5b_1772659666075",
-            "submittedAt": "2026-03-04T21:27:46.157Z"
-          }
-        },
-        {
-          "key": "action_crypto_ab0e531772766e1456bf",
-          "updatedAt": "2026-03-04T21:27:46.247Z",
-          "opportunityKey": "crypto_ab0e531772766e1456bf",
-          "title": "Execute quest: [每日信息流] 2024-08-29",
-          "status": "queued",
-          "priority": "high",
-          "category": "quest",
-          "score": 100,
-          "rewardEstimateUsd": 250000,
-          "targetUrl": "https://github.com/Tyaoo/picker/issues/749",
-          "dueAt": "2026-03-05T03:27:45.734Z",
-          "runbook": {
-            "objective": "Submit a high-quality quest response for: [每日信息流] 2024-08-29",
-            "steps": [
-              "Read full opportunity brief and acceptance criteria.",
-              "Extract hard requirements and submission deadline.",
-              "Confirm payout signal and submit-path signal. Monetization readiness: payable=true, submission_path=true, automation=true, confidence=89",
-              "Produce concise technical proposal aligned to requirements.",
-              "Prepare proof artifacts (links, screenshots, code references).",
-              "Submit through official channel and log submission reference."
-            ],
-            "submissionDraft": "Title: [每日信息流] 2024-08-29\n\nSummary:\n# 每日安全资讯（2024-08-29） - SecWiki News - [ ] [SecWiki News 2024-08-28 Review](http://www.sec-wiki.com/?2024-08-28) - 奇安信攻防社区 - [ ] [初探UE4引擎逆向](https://forum.butian.net/share/3687) - Doonsec's feed - [ ] [未来20多年可能减少2亿多人](https://mp.weixin.qq.co\n\nExecution Plan:\n- Scope: Deliver requirements exactly as requested.\n- Approach: Prioritize high-impact items with clear proof.\n- Deliverables: Structured report + references + evidence.\n\nWhy this submission should win:\n- Directly aligned to success criteria.\n- Fast execution timeline with verification-ready output.\n- Risk controls and clear communication.\n- Readiness confidence: 89/100.\n\nPayout signals: bounty\nSubmission signals: issue, application\n\nTarget URL: https://github.com/Tyaoo/picker/issues/749"
-          },
-          "execution": {
-            "attempts": 1,
-            "lastAttemptAt": "2026-03-04T21:27:46.247Z",
-            "nextAttemptAt": "2026-03-04T21:32:46.247Z",
-            "lastResult": "failed",
-            "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
-          },
-          "submission": {
-            "channel": "github_issue_comment",
-            "state": "failed",
-            "externalUrl": null,
-            "submissionKey": "submission_action_crypto_ab0e531772766e1456bf_1772659666160",
-            "submittedAt": "2026-03-04T21:27:46.247Z"
-          }
-        },
-        {
-          "key": "action_crypto_af81810075aea6ab2599",
-          "updatedAt": "2026-03-04T21:27:46.334Z",
-          "opportunityKey": "crypto_af81810075aea6ab2599",
-          "title": "Execute bounty: MVP Development Roadmap",
-          "status": "queued",
-          "priority": "high",
-          "category": "bounty",
-          "score": 100,
-          "rewardEstimateUsd": 200000,
-          "targetUrl": "https://github.com/notsatoshii/lever/issues/1",
-          "dueAt": "2026-03-05T03:27:45.735Z",
-          "runbook": {
-            "objective": "Submit a high-quality bounty response for: MVP Development Roadmap",
-            "steps": [
-              "Read full opportunity brief and acceptance criteria.",
-              "Extract hard requirements and submission deadline.",
-              "Confirm payout signal and submit-path signal. Monetization readiness: payable=true, submission_path=true, automation=true, confidence=83",
-              "Produce concise technical proposal aligned to requirements.",
-              "Prepare proof artifacts (links, screenshots, code references).",
-              "Submit through official channel and log submission reference."
-            ],
-            "submissionDraft": "Title: MVP Development Roadmap\n\nSummary:\n## Phase 1: MVP (Q1 2026) ### Goals - Launch with 1-2 prediction markets - Support up to 5x leverage - Single LP pool - Basic keeper infrastructure ### Smart Contracts - [ ] Position Ledger - Central position tracking - [ ] Pricing Engine -\n\nExecution Plan:\n- Scope: Deliver requirements exactly as requested.\n- Approach: Prioritize high-impact items with clear proof.\n- Deliverables: Structured report + references + evidence.\n\nWhy this submission should win:\n- Directly aligned to success criteria.\n- Fast execution timeline with verification-ready output.\n- Risk controls and clear communication.\n- Readiness confidence: 83/100.\n\nPayout signals: bounty\nSubmission signals: apply, issue\n\nTarget URL: https://github.com/notsatoshii/lever/issues/1"
-          },
-          "execution": {
-            "attempts": 1,
-            "lastAttemptAt": "2026-03-04T21:27:46.334Z",
-            "nextAttemptAt": "2026-03-04T21:32:46.334Z",
-            "lastResult": "failed",
-            "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
-          },
-          "submission": {
-            "channel": "github_issue_comment",
-            "state": "failed",
-            "externalUrl": null,
-            "submissionKey": "submission_action_crypto_af81810075aea6ab2599_1772659666250",
-            "submittedAt": "2026-03-04T21:27:46.334Z"
-          }
-        },
-        {
-          "key": "action_crypto_7feb29c6587a9d630778",
-          "updatedAt": "2026-03-04T21:27:46.411Z",
-          "opportunityKey": "crypto_7feb29c6587a9d630778",
-          "title": "Execute quest: 区块链技术与应用Notes",
-          "status": "queued",
-          "priority": "high",
-          "category": "quest",
-          "score": 100,
-          "rewardEstimateUsd": 128000,
-          "targetUrl": "https://github.com/leno23/leetcode-solu/issues/10",
-          "dueAt": "2026-03-05T03:27:45.736Z",
-          "runbook": {
-            "objective": "Submit a high-quality quest response for: 区块链技术与应用Notes",
-            "steps": [
-              "Read full opportunity brief and acceptance criteria.",
-              "Extract hard requirements and submission deadline.",
-              "Confirm payout signal and submit-path signal. Monetization readiness: payable=true, submission_path=true, automation=true, confidence=100",
-              "Produce concise technical proposal aligned to requirements.",
-              "Prepare proof artifacts (links, screenshots, code references).",
-              "Submit through official channel and log submission reference."
-            ],
-            "submissionDraft": "Title: 区块链技术与应用Notes\n\nSummary:\n区块链技术与应用Notes > 北大 肖臻 > > Made by Ryan方 > > Based on Welles Sun > > [CSWellesSun](https://github.com/CSWellesSun/CSNotes/tree/main/%E5%8C%BA%E5%9D%97%E9%93%BE%E6%8A%80%E6%9C%AF%E4%B8%8E%E5%BA%94%E7%94%A8/Note) # 1 BTC ## **1.1 BTC-密码学原理** >\n\nExecution Plan:\n- Scope: Deliver requirements exactly as requested.\n- Approach: Prioritize high-impact items with clear proof.\n- Deliverables: Structured report + references + evidence.\n\nWhy this submission should win:\n- Directly aligned to success criteria.\n- Fast execution timeline with verification-ready output.\n- Risk controls and clear communication.\n- Readiness confidence: 100/100.\n\nPayout signals: reward, bounty\nSubmission signals: application\n\nTarget URL: https://github.com/leno23/leetcode-solu/issues/10"
-          },
-          "execution": {
-            "attempts": 1,
-            "lastAttemptAt": "2026-03-04T21:27:46.411Z",
-            "nextAttemptAt": "2026-03-04T21:32:46.411Z",
-            "lastResult": "failed",
-            "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
-          },
-          "submission": {
-            "channel": "github_issue_comment",
-            "state": "failed",
-            "externalUrl": null,
-            "submissionKey": "submission_action_crypto_7feb29c6587a9d630778_1772659666337",
-            "submittedAt": "2026-03-04T21:27:46.411Z"
-          }
-        },
-        {
           "key": "action_crypto_05aad72b4d8fac46655e",
-          "updatedAt": "2026-03-04T21:27:45.820Z",
+          "updatedAt": "2026-03-04T21:27:46.374Z",
           "opportunityKey": "crypto_05aad72b4d8fac46655e",
           "title": "Execute bounty: Including link:",
           "status": "queued",
@@ -778,7 +583,7 @@
           "score": 100,
           "rewardEstimateUsd": 25202689689,
           "targetUrl": "https://github.com/john501brown10-ux/Tron/issues/1",
-          "dueAt": "2026-03-05T03:27:45.730Z",
+          "dueAt": "2026-03-05T03:27:46.242Z",
           "runbook": {
             "objective": "Submit a high-quality bounty response for: Including link:",
             "steps": [
@@ -793,8 +598,8 @@
           },
           "execution": {
             "attempts": 1,
-            "lastAttemptAt": "2026-03-04T21:27:45.820Z",
-            "nextAttemptAt": "2026-03-04T21:32:45.820Z",
+            "lastAttemptAt": "2026-03-04T21:27:46.374Z",
+            "nextAttemptAt": "2026-03-04T21:32:46.374Z",
             "lastResult": "failed",
             "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
           },
@@ -802,13 +607,13 @@
             "channel": "github_issue_comment",
             "state": "failed",
             "externalUrl": null,
-            "submissionKey": "submission_action_crypto_05aad72b4d8fac46655e_1772659665743",
-            "submittedAt": "2026-03-04T21:27:45.820Z"
+            "submissionKey": "submission_action_crypto_05aad72b4d8fac46655e_1772659666256",
+            "submittedAt": "2026-03-04T21:27:46.374Z"
           }
         },
         {
           "key": "action_crypto_683b04f41604ca47b2ec",
-          "updatedAt": "2026-03-04T21:27:45.901Z",
+          "updatedAt": "2026-03-04T21:27:46.457Z",
           "opportunityKey": "crypto_683b04f41604ca47b2ec",
           "title": "Execute quest: [每日信息流] 2025-08-20",
           "status": "queued",
@@ -817,7 +622,7 @@
           "score": 100,
           "rewardEstimateUsd": 6200000,
           "targetUrl": "https://github.com/Tyaoo/picker/issues/1105",
-          "dueAt": "2026-03-05T03:27:45.731Z",
+          "dueAt": "2026-03-05T03:27:46.243Z",
           "runbook": {
             "objective": "Submit a high-quality quest response for: [每日信息流] 2025-08-20",
             "steps": [
@@ -832,8 +637,8 @@
           },
           "execution": {
             "attempts": 1,
-            "lastAttemptAt": "2026-03-04T21:27:45.901Z",
-            "nextAttemptAt": "2026-03-04T21:32:45.901Z",
+            "lastAttemptAt": "2026-03-04T21:27:46.457Z",
+            "nextAttemptAt": "2026-03-04T21:32:46.457Z",
             "lastResult": "failed",
             "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
           },
@@ -841,13 +646,13 @@
             "channel": "github_issue_comment",
             "state": "failed",
             "externalUrl": null,
-            "submissionKey": "submission_action_crypto_683b04f41604ca47b2ec_1772659665822",
-            "submittedAt": "2026-03-04T21:27:45.901Z"
+            "submissionKey": "submission_action_crypto_683b04f41604ca47b2ec_1772659666377",
+            "submittedAt": "2026-03-04T21:27:46.457Z"
           }
         },
         {
           "key": "action_crypto_5884e0a075e35344d525",
-          "updatedAt": "2026-03-04T21:27:45.986Z",
+          "updatedAt": "2026-03-04T21:27:46.551Z",
           "opportunityKey": "crypto_5884e0a075e35344d525",
           "title": "Execute grant: Build a DAO Treasury Reporting Agent",
           "status": "queued",
@@ -856,7 +661,7 @@
           "score": 100,
           "rewardEstimateUsd": 4000000,
           "targetUrl": "https://github.com/PayPol-Foundation/paypol-protocol/issues/9",
-          "dueAt": "2026-03-05T03:27:45.732Z",
+          "dueAt": "2026-03-05T03:27:46.244Z",
           "runbook": {
             "objective": "Submit a high-quality grant response for: Build a DAO Treasury Reporting Agent",
             "steps": [
@@ -871,8 +676,8 @@
           },
           "execution": {
             "attempts": 1,
-            "lastAttemptAt": "2026-03-04T21:27:45.986Z",
-            "nextAttemptAt": "2026-03-04T21:32:45.986Z",
+            "lastAttemptAt": "2026-03-04T21:27:46.551Z",
+            "nextAttemptAt": "2026-03-04T21:32:46.551Z",
             "lastResult": "failed",
             "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
           },
@@ -880,13 +685,208 @@
             "channel": "github_issue_comment",
             "state": "failed",
             "externalUrl": null,
-            "submissionKey": "submission_action_crypto_5884e0a075e35344d525_1772659665904",
-            "submittedAt": "2026-03-04T21:27:45.986Z"
+            "submissionKey": "submission_action_crypto_5884e0a075e35344d525_1772659666460",
+            "submittedAt": "2026-03-04T21:27:46.550Z"
+          }
+        },
+        {
+          "key": "action_crypto_46fa816e99ca9e55a089",
+          "updatedAt": "2026-03-04T21:27:46.635Z",
+          "opportunityKey": "crypto_46fa816e99ca9e55a089",
+          "title": "Execute grant: [Case Study] Gitcoin Citizens Round 1: Retroactive Quadratic Funding for Community Contributions",
+          "status": "queued",
+          "priority": "high",
+          "category": "grant",
+          "score": 100,
+          "rewardEstimateUsd": 500000,
+          "targetUrl": "https://github.com/gitcoinco/gitcoin_co_30/issues/41",
+          "dueAt": "2026-03-05T03:27:46.245Z",
+          "runbook": {
+            "objective": "Submit a high-quality grant response for: [Case Study] Gitcoin Citizens Round 1: Retroactive Quadratic Funding for Community Contributions",
+            "steps": [
+              "Read full opportunity brief and acceptance criteria.",
+              "Extract hard requirements and submission deadline.",
+              "Confirm payout signal and submit-path signal. Monetization readiness: payable=true, submission_path=true, automation=true, confidence=100",
+              "Produce concise technical proposal aligned to requirements.",
+              "Prepare proof artifacts (links, screenshots, code references).",
+              "Submit through official channel and log submission reference."
+            ],
+            "submissionDraft": "Title: [Case Study] Gitcoin Citizens Round 1: Retroactive Quadratic Funding for Community Contributions\n\nSummary:\n<!-- IMPORTANT: This template is automatically parsed by a script to generate content files. - Fill in all metadata fields below — do NOT rename or remove the field labels (e.g. \"Short Description\", \"Tags\"). - The bold field names (e.g. **S\n\nExecution Plan:\n- Scope: Deliver requirements exactly as requested.\n- Approach: Prioritize high-impact items with clear proof.\n- Deliverables: Structured report + references + evidence.\n\nWhy this submission should win:\n- Directly aligned to success criteria.\n- Fast execution timeline with verification-ready output.\n- Risk controls and clear communication.\n- Readiness confidence: 100/100.\n\nPayout signals: reward, compensation, grant, dai, token\nSubmission signals: apply, application, submission\n\nTarget URL: https://github.com/gitcoinco/gitcoin_co_30/issues/41"
+          },
+          "execution": {
+            "attempts": 1,
+            "lastAttemptAt": "2026-03-04T21:27:46.635Z",
+            "nextAttemptAt": "2026-03-04T21:32:46.635Z",
+            "lastResult": "failed",
+            "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
+          },
+          "submission": {
+            "channel": "github_issue_comment",
+            "state": "failed",
+            "externalUrl": null,
+            "submissionKey": "submission_action_crypto_46fa816e99ca9e55a089_1772659666554",
+            "submittedAt": "2026-03-04T21:27:46.635Z"
+          }
+        },
+        {
+          "key": "action_crypto_1720558e5b7cfca04e5b",
+          "updatedAt": "2026-03-04T21:27:46.716Z",
+          "opportunityKey": "crypto_1720558e5b7cfca04e5b",
+          "title": "Execute job: [每日信息流] 2023-12-12",
+          "status": "queued",
+          "priority": "high",
+          "category": "job",
+          "score": 100,
+          "rewardEstimateUsd": 480000,
+          "targetUrl": "https://github.com/BruceFeIix/picker/issues/708",
+          "dueAt": "2026-03-05T03:27:46.246Z",
+          "runbook": {
+            "objective": "Submit a high-quality job response for: [每日信息流] 2023-12-12",
+            "steps": [
+              "Read full opportunity brief and acceptance criteria.",
+              "Extract hard requirements and submission deadline.",
+              "Confirm payout signal and submit-path signal. Monetization readiness: payable=true, submission_path=true, automation=true, confidence=83",
+              "Produce concise technical proposal aligned to requirements.",
+              "Prepare proof artifacts (links, screenshots, code references).",
+              "Submit through official channel and log submission reference."
+            ],
+            "submissionDraft": "Title: [每日信息流] 2023-12-12\n\nSummary:\n# 每日安全资讯（2023-12-12） - SecWiki News - [ ] [SecWiki News 2023-12-11 Review](http://www.sec-wiki.com/?2023-12-11) - Sploitus.com Exploits RSS Feed - [ ] [WordPress TextMe SMS 1.9.0 Cross Site Request Forgery exploit](https://sploitus.com/expl\n\nExecution Plan:\n- Scope: Deliver requirements exactly as requested.\n- Approach: Prioritize high-impact items with clear proof.\n- Deliverables: Structured report + references + evidence.\n\nWhy this submission should win:\n- Directly aligned to success criteria.\n- Fast execution timeline with verification-ready output.\n- Risk controls and clear communication.\n- Readiness confidence: 83/100.\n\nPayout signals: bounty\nSubmission signals: form, issue, application\n\nTarget URL: https://github.com/BruceFeIix/picker/issues/708"
+          },
+          "execution": {
+            "attempts": 1,
+            "lastAttemptAt": "2026-03-04T21:27:46.716Z",
+            "nextAttemptAt": "2026-03-04T21:32:46.716Z",
+            "lastResult": "failed",
+            "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
+          },
+          "submission": {
+            "channel": "github_issue_comment",
+            "state": "failed",
+            "externalUrl": null,
+            "submissionKey": "submission_action_crypto_1720558e5b7cfca04e5b_1772659666638",
+            "submittedAt": "2026-03-04T21:27:46.716Z"
+          }
+        },
+        {
+          "key": "action_crypto_ab0e531772766e1456bf",
+          "updatedAt": "2026-03-04T21:27:46.799Z",
+          "opportunityKey": "crypto_ab0e531772766e1456bf",
+          "title": "Execute quest: [每日信息流] 2024-08-29",
+          "status": "queued",
+          "priority": "high",
+          "category": "quest",
+          "score": 100,
+          "rewardEstimateUsd": 250000,
+          "targetUrl": "https://github.com/Tyaoo/picker/issues/749",
+          "dueAt": "2026-03-05T03:27:46.247Z",
+          "runbook": {
+            "objective": "Submit a high-quality quest response for: [每日信息流] 2024-08-29",
+            "steps": [
+              "Read full opportunity brief and acceptance criteria.",
+              "Extract hard requirements and submission deadline.",
+              "Confirm payout signal and submit-path signal. Monetization readiness: payable=true, submission_path=true, automation=true, confidence=89",
+              "Produce concise technical proposal aligned to requirements.",
+              "Prepare proof artifacts (links, screenshots, code references).",
+              "Submit through official channel and log submission reference."
+            ],
+            "submissionDraft": "Title: [每日信息流] 2024-08-29\n\nSummary:\n# 每日安全资讯（2024-08-29） - SecWiki News - [ ] [SecWiki News 2024-08-28 Review](http://www.sec-wiki.com/?2024-08-28) - 奇安信攻防社区 - [ ] [初探UE4引擎逆向](https://forum.butian.net/share/3687) - Doonsec's feed - [ ] [未来20多年可能减少2亿多人](https://mp.weixin.qq.co\n\nExecution Plan:\n- Scope: Deliver requirements exactly as requested.\n- Approach: Prioritize high-impact items with clear proof.\n- Deliverables: Structured report + references + evidence.\n\nWhy this submission should win:\n- Directly aligned to success criteria.\n- Fast execution timeline with verification-ready output.\n- Risk controls and clear communication.\n- Readiness confidence: 89/100.\n\nPayout signals: bounty\nSubmission signals: issue, application\n\nTarget URL: https://github.com/Tyaoo/picker/issues/749"
+          },
+          "execution": {
+            "attempts": 1,
+            "lastAttemptAt": "2026-03-04T21:27:46.799Z",
+            "nextAttemptAt": "2026-03-04T21:32:46.799Z",
+            "lastResult": "failed",
+            "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
+          },
+          "submission": {
+            "channel": "github_issue_comment",
+            "state": "failed",
+            "externalUrl": null,
+            "submissionKey": "submission_action_crypto_ab0e531772766e1456bf_1772659666721",
+            "submittedAt": "2026-03-04T21:27:46.799Z"
+          }
+        },
+        {
+          "key": "action_crypto_af81810075aea6ab2599",
+          "updatedAt": "2026-03-04T21:27:46.874Z",
+          "opportunityKey": "crypto_af81810075aea6ab2599",
+          "title": "Execute bounty: MVP Development Roadmap",
+          "status": "queued",
+          "priority": "high",
+          "category": "bounty",
+          "score": 100,
+          "rewardEstimateUsd": 200000,
+          "targetUrl": "https://github.com/notsatoshii/lever/issues/1",
+          "dueAt": "2026-03-05T03:27:46.248Z",
+          "runbook": {
+            "objective": "Submit a high-quality bounty response for: MVP Development Roadmap",
+            "steps": [
+              "Read full opportunity brief and acceptance criteria.",
+              "Extract hard requirements and submission deadline.",
+              "Confirm payout signal and submit-path signal. Monetization readiness: payable=true, submission_path=true, automation=true, confidence=83",
+              "Produce concise technical proposal aligned to requirements.",
+              "Prepare proof artifacts (links, screenshots, code references).",
+              "Submit through official channel and log submission reference."
+            ],
+            "submissionDraft": "Title: MVP Development Roadmap\n\nSummary:\n## Phase 1: MVP (Q1 2026) ### Goals - Launch with 1-2 prediction markets - Support up to 5x leverage - Single LP pool - Basic keeper infrastructure ### Smart Contracts - [ ] Position Ledger - Central position tracking - [ ] Pricing Engine -\n\nExecution Plan:\n- Scope: Deliver requirements exactly as requested.\n- Approach: Prioritize high-impact items with clear proof.\n- Deliverables: Structured report + references + evidence.\n\nWhy this submission should win:\n- Directly aligned to success criteria.\n- Fast execution timeline with verification-ready output.\n- Risk controls and clear communication.\n- Readiness confidence: 83/100.\n\nPayout signals: bounty\nSubmission signals: apply, issue\n\nTarget URL: https://github.com/notsatoshii/lever/issues/1"
+          },
+          "execution": {
+            "attempts": 1,
+            "lastAttemptAt": "2026-03-04T21:27:46.874Z",
+            "nextAttemptAt": "2026-03-04T21:32:46.874Z",
+            "lastResult": "failed",
+            "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
+          },
+          "submission": {
+            "channel": "github_issue_comment",
+            "state": "failed",
+            "externalUrl": null,
+            "submissionKey": "submission_action_crypto_af81810075aea6ab2599_1772659666802",
+            "submittedAt": "2026-03-04T21:27:46.874Z"
+          }
+        },
+        {
+          "key": "action_crypto_7feb29c6587a9d630778",
+          "updatedAt": "2026-03-04T21:27:46.949Z",
+          "opportunityKey": "crypto_7feb29c6587a9d630778",
+          "title": "Execute quest: 区块链技术与应用Notes",
+          "status": "queued",
+          "priority": "high",
+          "category": "quest",
+          "score": 100,
+          "rewardEstimateUsd": 128000,
+          "targetUrl": "https://github.com/leno23/leetcode-solu/issues/10",
+          "dueAt": "2026-03-05T03:27:46.249Z",
+          "runbook": {
+            "objective": "Submit a high-quality quest response for: 区块链技术与应用Notes",
+            "steps": [
+              "Read full opportunity brief and acceptance criteria.",
+              "Extract hard requirements and submission deadline.",
+              "Confirm payout signal and submit-path signal. Monetization readiness: payable=true, submission_path=true, automation=true, confidence=100",
+              "Produce concise technical proposal aligned to requirements.",
+              "Prepare proof artifacts (links, screenshots, code references).",
+              "Submit through official channel and log submission reference."
+            ],
+            "submissionDraft": "Title: 区块链技术与应用Notes\n\nSummary:\n区块链技术与应用Notes > 北大 肖臻 > > Made by Ryan方 > > Based on Welles Sun > > [CSWellesSun](https://github.com/CSWellesSun/CSNotes/tree/main/%E5%8C%BA%E5%9D%97%E9%93%BE%E6%8A%80%E6%9C%AF%E4%B8%8E%E5%BA%94%E7%94%A8/Note) # 1 BTC ## **1.1 BTC-密码学原理** >\n\nExecution Plan:\n- Scope: Deliver requirements exactly as requested.\n- Approach: Prioritize high-impact items with clear proof.\n- Deliverables: Structured report + references + evidence.\n\nWhy this submission should win:\n- Directly aligned to success criteria.\n- Fast execution timeline with verification-ready output.\n- Risk controls and clear communication.\n- Readiness confidence: 100/100.\n\nPayout signals: reward, bounty\nSubmission signals: application\n\nTarget URL: https://github.com/leno23/leetcode-solu/issues/10"
+          },
+          "execution": {
+            "attempts": 1,
+            "lastAttemptAt": "2026-03-04T21:27:46.949Z",
+            "nextAttemptAt": "2026-03-04T21:32:46.949Z",
+            "lastResult": "failed",
+            "lastError": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
+          },
+          "submission": {
+            "channel": "github_issue_comment",
+            "state": "failed",
+            "externalUrl": null,
+            "submissionKey": "submission_action_crypto_7feb29c6587a9d630778_1772659666876",
+            "submittedAt": "2026-03-04T21:27:46.949Z"
           }
         },
         {
           "key": "action_crypto_7df3d7bc5e609ef245c4",
-          "updatedAt": "2026-03-04T21:27:45.737Z",
+          "updatedAt": "2026-03-04T21:27:46.250Z",
           "opportunityKey": "crypto_7df3d7bc5e609ef245c4",
           "title": "Execute grant: [Mechanism] Streaming Grants",
           "status": "queued",
@@ -895,7 +895,7 @@
           "score": 100,
           "rewardEstimateUsd": 100000,
           "targetUrl": "https://github.com/gitcoinco/gitcoin_co_30/issues/138",
-          "dueAt": "2026-03-05T03:27:45.737Z",
+          "dueAt": "2026-03-05T03:27:46.250Z",
           "runbook": {
             "objective": "Submit a high-quality grant response for: [Mechanism] Streaming Grants",
             "steps": [
@@ -911,14 +911,14 @@
           "execution": {
             "attempts": 0,
             "lastAttemptAt": null,
-            "nextAttemptAt": "2026-03-04T21:27:45.737Z",
+            "nextAttemptAt": "2026-03-04T21:27:46.250Z",
             "lastResult": null,
             "lastError": null
           }
         },
         {
           "key": "action_crypto_9571cb696bbc5ab4a300",
-          "updatedAt": "2026-03-04T21:27:45.738Z",
+          "updatedAt": "2026-03-04T21:27:46.251Z",
           "opportunityKey": "crypto_9571cb696bbc5ab4a300",
           "title": "Execute grant: Bitcoin Agent Capital Pools — Full Specification",
           "status": "queued",
@@ -927,7 +927,7 @@
           "score": 100,
           "rewardEstimateUsd": 100000,
           "targetUrl": "https://github.com/aibtcdev/agent-contracts/issues/4",
-          "dueAt": "2026-03-05T03:27:45.738Z",
+          "dueAt": "2026-03-05T03:27:46.251Z",
           "runbook": {
             "objective": "Submit a high-quality grant response for: Bitcoin Agent Capital Pools — Full Specification",
             "steps": [
@@ -943,14 +943,14 @@
           "execution": {
             "attempts": 0,
             "lastAttemptAt": null,
-            "nextAttemptAt": "2026-03-04T21:27:45.738Z",
+            "nextAttemptAt": "2026-03-04T21:27:46.251Z",
             "lastResult": null,
             "lastError": null
           }
         },
         {
           "key": "action_crypto_56e80f1c5eb1c9b39a03",
-          "updatedAt": "2026-03-04T21:27:45.739Z",
+          "updatedAt": "2026-03-04T21:27:46.252Z",
           "opportunityKey": "crypto_56e80f1c5eb1c9b39a03",
           "title": "Execute grant: Backchain: The First Complete Web3 Ecosystem for Mass Adoption on opBNB",
           "status": "queued",
@@ -959,7 +959,7 @@
           "score": 100,
           "rewardEstimateUsd": 100000,
           "targetUrl": "https://github.com/bnb-chain/community-contributions/issues/126",
-          "dueAt": "2026-03-05T03:27:45.739Z",
+          "dueAt": "2026-03-05T03:27:46.252Z",
           "runbook": {
             "objective": "Submit a high-quality grant response for: Backchain: The First Complete Web3 Ecosystem for Mass Adoption on opBNB",
             "steps": [
@@ -975,14 +975,14 @@
           "execution": {
             "attempts": 0,
             "lastAttemptAt": null,
-            "nextAttemptAt": "2026-03-04T21:27:45.739Z",
+            "nextAttemptAt": "2026-03-04T21:27:46.252Z",
             "lastResult": null,
             "lastError": null
           }
         },
         {
           "key": "action_crypto_7a74c14968ac00d628ba",
-          "updatedAt": "2026-03-04T21:27:45.740Z",
+          "updatedAt": "2026-03-04T21:27:46.253Z",
           "opportunityKey": "crypto_7a74c14968ac00d628ba",
           "title": "Execute grant: Gta",
           "status": "queued",
@@ -991,7 +991,7 @@
           "score": 100,
           "rewardEstimateUsd": 70000,
           "targetUrl": "https://github.com/KPanchal-kalki/KP923/issues/1",
-          "dueAt": "2026-03-05T03:27:45.740Z",
+          "dueAt": "2026-03-05T03:27:46.253Z",
           "runbook": {
             "objective": "Submit a high-quality grant response for: Gta",
             "steps": [
@@ -1007,7 +1007,7 @@
           "execution": {
             "attempts": 0,
             "lastAttemptAt": null,
-            "nextAttemptAt": "2026-03-04T21:27:45.740Z",
+            "nextAttemptAt": "2026-03-04T21:27:46.253Z",
             "lastResult": null,
             "lastError": null
           }
@@ -1015,134 +1015,9 @@
       ],
       "cryptoSubmissions": [
         {
-          "key": "submission_action_crypto_46fa816e99ca9e55a089_1772659665990",
+          "key": "submission_action_crypto_05aad72b4d8fac46655e_1772659666256",
           "updatedAt": "2026-03-04 21:27:46",
-          "submissionKey": "submission_action_crypto_46fa816e99ca9e55a089_1772659665990",
-          "taskKey": "action_crypto_46fa816e99ca9e55a089",
-          "opportunityKey": "crypto_46fa816e99ca9e55a089",
-          "channel": "github_issue_comment",
-          "state": "failed",
-          "externalUrl": null,
-          "targetUrl": "https://github.com/gitcoinco/gitcoin_co_30/issues/41",
-          "message": "GitHub submission failed (403)",
-          "error": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}",
-          "lifecycle": {
-            "stage": "failed",
-            "acceptedSignal": false,
-            "paidSignal": false,
-            "source": "initial",
-            "confidence": 10,
-            "notes": [
-              "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
-            ],
-            "lastCheckedAt": "2026-03-04T21:27:46.073Z"
-          },
-          "createdAt": "2026-03-04T21:27:46.073Z"
-        },
-        {
-          "key": "submission_action_crypto_1720558e5b7cfca04e5b_1772659666075",
-          "updatedAt": "2026-03-04 21:27:46",
-          "submissionKey": "submission_action_crypto_1720558e5b7cfca04e5b_1772659666075",
-          "taskKey": "action_crypto_1720558e5b7cfca04e5b",
-          "opportunityKey": "crypto_1720558e5b7cfca04e5b",
-          "channel": "github_issue_comment",
-          "state": "failed",
-          "externalUrl": null,
-          "targetUrl": "https://github.com/BruceFeIix/picker/issues/708",
-          "message": "GitHub submission failed (403)",
-          "error": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}",
-          "lifecycle": {
-            "stage": "failed",
-            "acceptedSignal": false,
-            "paidSignal": false,
-            "source": "initial",
-            "confidence": 10,
-            "notes": [
-              "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
-            ],
-            "lastCheckedAt": "2026-03-04T21:27:46.158Z"
-          },
-          "createdAt": "2026-03-04T21:27:46.158Z"
-        },
-        {
-          "key": "submission_action_crypto_ab0e531772766e1456bf_1772659666160",
-          "updatedAt": "2026-03-04 21:27:46",
-          "submissionKey": "submission_action_crypto_ab0e531772766e1456bf_1772659666160",
-          "taskKey": "action_crypto_ab0e531772766e1456bf",
-          "opportunityKey": "crypto_ab0e531772766e1456bf",
-          "channel": "github_issue_comment",
-          "state": "failed",
-          "externalUrl": null,
-          "targetUrl": "https://github.com/Tyaoo/picker/issues/749",
-          "message": "GitHub submission failed (403)",
-          "error": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}",
-          "lifecycle": {
-            "stage": "failed",
-            "acceptedSignal": false,
-            "paidSignal": false,
-            "source": "initial",
-            "confidence": 10,
-            "notes": [
-              "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
-            ],
-            "lastCheckedAt": "2026-03-04T21:27:46.248Z"
-          },
-          "createdAt": "2026-03-04T21:27:46.248Z"
-        },
-        {
-          "key": "submission_action_crypto_af81810075aea6ab2599_1772659666250",
-          "updatedAt": "2026-03-04 21:27:46",
-          "submissionKey": "submission_action_crypto_af81810075aea6ab2599_1772659666250",
-          "taskKey": "action_crypto_af81810075aea6ab2599",
-          "opportunityKey": "crypto_af81810075aea6ab2599",
-          "channel": "github_issue_comment",
-          "state": "failed",
-          "externalUrl": null,
-          "targetUrl": "https://github.com/notsatoshii/lever/issues/1",
-          "message": "GitHub submission failed (403)",
-          "error": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}",
-          "lifecycle": {
-            "stage": "failed",
-            "acceptedSignal": false,
-            "paidSignal": false,
-            "source": "initial",
-            "confidence": 10,
-            "notes": [
-              "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
-            ],
-            "lastCheckedAt": "2026-03-04T21:27:46.335Z"
-          },
-          "createdAt": "2026-03-04T21:27:46.335Z"
-        },
-        {
-          "key": "submission_action_crypto_7feb29c6587a9d630778_1772659666337",
-          "updatedAt": "2026-03-04 21:27:46",
-          "submissionKey": "submission_action_crypto_7feb29c6587a9d630778_1772659666337",
-          "taskKey": "action_crypto_7feb29c6587a9d630778",
-          "opportunityKey": "crypto_7feb29c6587a9d630778",
-          "channel": "github_issue_comment",
-          "state": "failed",
-          "externalUrl": null,
-          "targetUrl": "https://github.com/leno23/leetcode-solu/issues/10",
-          "message": "GitHub submission failed (403)",
-          "error": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}",
-          "lifecycle": {
-            "stage": "failed",
-            "acceptedSignal": false,
-            "paidSignal": false,
-            "source": "initial",
-            "confidence": 10,
-            "notes": [
-              "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
-            ],
-            "lastCheckedAt": "2026-03-04T21:27:46.412Z"
-          },
-          "createdAt": "2026-03-04T21:27:46.412Z"
-        },
-        {
-          "key": "submission_action_crypto_05aad72b4d8fac46655e_1772659665743",
-          "updatedAt": "2026-03-04 21:27:45",
-          "submissionKey": "submission_action_crypto_05aad72b4d8fac46655e_1772659665743",
+          "submissionKey": "submission_action_crypto_05aad72b4d8fac46655e_1772659666256",
           "taskKey": "action_crypto_05aad72b4d8fac46655e",
           "opportunityKey": "crypto_05aad72b4d8fac46655e",
           "channel": "github_issue_comment",
@@ -1160,14 +1035,14 @@
             "notes": [
               "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
             ],
-            "lastCheckedAt": "2026-03-04T21:27:45.821Z"
+            "lastCheckedAt": "2026-03-04T21:27:46.375Z"
           },
-          "createdAt": "2026-03-04T21:27:45.821Z"
+          "createdAt": "2026-03-04T21:27:46.375Z"
         },
         {
-          "key": "submission_action_crypto_683b04f41604ca47b2ec_1772659665822",
-          "updatedAt": "2026-03-04 21:27:45",
-          "submissionKey": "submission_action_crypto_683b04f41604ca47b2ec_1772659665822",
+          "key": "submission_action_crypto_683b04f41604ca47b2ec_1772659666377",
+          "updatedAt": "2026-03-04 21:27:46",
+          "submissionKey": "submission_action_crypto_683b04f41604ca47b2ec_1772659666377",
           "taskKey": "action_crypto_683b04f41604ca47b2ec",
           "opportunityKey": "crypto_683b04f41604ca47b2ec",
           "channel": "github_issue_comment",
@@ -1185,14 +1060,14 @@
             "notes": [
               "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
             ],
-            "lastCheckedAt": "2026-03-04T21:27:45.902Z"
+            "lastCheckedAt": "2026-03-04T21:27:46.458Z"
           },
-          "createdAt": "2026-03-04T21:27:45.902Z"
+          "createdAt": "2026-03-04T21:27:46.458Z"
         },
         {
-          "key": "submission_action_crypto_5884e0a075e35344d525_1772659665904",
-          "updatedAt": "2026-03-04 21:27:45",
-          "submissionKey": "submission_action_crypto_5884e0a075e35344d525_1772659665904",
+          "key": "submission_action_crypto_5884e0a075e35344d525_1772659666460",
+          "updatedAt": "2026-03-04 21:27:46",
+          "submissionKey": "submission_action_crypto_5884e0a075e35344d525_1772659666460",
           "taskKey": "action_crypto_5884e0a075e35344d525",
           "opportunityKey": "crypto_5884e0a075e35344d525",
           "channel": "github_issue_comment",
@@ -1210,9 +1085,134 @@
             "notes": [
               "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
             ],
-            "lastCheckedAt": "2026-03-04T21:27:45.987Z"
+            "lastCheckedAt": "2026-03-04T21:27:46.552Z"
           },
-          "createdAt": "2026-03-04T21:27:45.987Z"
+          "createdAt": "2026-03-04T21:27:46.552Z"
+        },
+        {
+          "key": "submission_action_crypto_46fa816e99ca9e55a089_1772659666554",
+          "updatedAt": "2026-03-04 21:27:46",
+          "submissionKey": "submission_action_crypto_46fa816e99ca9e55a089_1772659666554",
+          "taskKey": "action_crypto_46fa816e99ca9e55a089",
+          "opportunityKey": "crypto_46fa816e99ca9e55a089",
+          "channel": "github_issue_comment",
+          "state": "failed",
+          "externalUrl": null,
+          "targetUrl": "https://github.com/gitcoinco/gitcoin_co_30/issues/41",
+          "message": "GitHub submission failed (403)",
+          "error": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}",
+          "lifecycle": {
+            "stage": "failed",
+            "acceptedSignal": false,
+            "paidSignal": false,
+            "source": "initial",
+            "confidence": 10,
+            "notes": [
+              "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
+            ],
+            "lastCheckedAt": "2026-03-04T21:27:46.636Z"
+          },
+          "createdAt": "2026-03-04T21:27:46.636Z"
+        },
+        {
+          "key": "submission_action_crypto_1720558e5b7cfca04e5b_1772659666638",
+          "updatedAt": "2026-03-04 21:27:46",
+          "submissionKey": "submission_action_crypto_1720558e5b7cfca04e5b_1772659666638",
+          "taskKey": "action_crypto_1720558e5b7cfca04e5b",
+          "opportunityKey": "crypto_1720558e5b7cfca04e5b",
+          "channel": "github_issue_comment",
+          "state": "failed",
+          "externalUrl": null,
+          "targetUrl": "https://github.com/BruceFeIix/picker/issues/708",
+          "message": "GitHub submission failed (403)",
+          "error": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}",
+          "lifecycle": {
+            "stage": "failed",
+            "acceptedSignal": false,
+            "paidSignal": false,
+            "source": "initial",
+            "confidence": 10,
+            "notes": [
+              "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
+            ],
+            "lastCheckedAt": "2026-03-04T21:27:46.719Z"
+          },
+          "createdAt": "2026-03-04T21:27:46.719Z"
+        },
+        {
+          "key": "submission_action_crypto_ab0e531772766e1456bf_1772659666721",
+          "updatedAt": "2026-03-04 21:27:46",
+          "submissionKey": "submission_action_crypto_ab0e531772766e1456bf_1772659666721",
+          "taskKey": "action_crypto_ab0e531772766e1456bf",
+          "opportunityKey": "crypto_ab0e531772766e1456bf",
+          "channel": "github_issue_comment",
+          "state": "failed",
+          "externalUrl": null,
+          "targetUrl": "https://github.com/Tyaoo/picker/issues/749",
+          "message": "GitHub submission failed (403)",
+          "error": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}",
+          "lifecycle": {
+            "stage": "failed",
+            "acceptedSignal": false,
+            "paidSignal": false,
+            "source": "initial",
+            "confidence": 10,
+            "notes": [
+              "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
+            ],
+            "lastCheckedAt": "2026-03-04T21:27:46.800Z"
+          },
+          "createdAt": "2026-03-04T21:27:46.800Z"
+        },
+        {
+          "key": "submission_action_crypto_af81810075aea6ab2599_1772659666802",
+          "updatedAt": "2026-03-04 21:27:46",
+          "submissionKey": "submission_action_crypto_af81810075aea6ab2599_1772659666802",
+          "taskKey": "action_crypto_af81810075aea6ab2599",
+          "opportunityKey": "crypto_af81810075aea6ab2599",
+          "channel": "github_issue_comment",
+          "state": "failed",
+          "externalUrl": null,
+          "targetUrl": "https://github.com/notsatoshii/lever/issues/1",
+          "message": "GitHub submission failed (403)",
+          "error": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}",
+          "lifecycle": {
+            "stage": "failed",
+            "acceptedSignal": false,
+            "paidSignal": false,
+            "source": "initial",
+            "confidence": 10,
+            "notes": [
+              "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
+            ],
+            "lastCheckedAt": "2026-03-04T21:27:46.875Z"
+          },
+          "createdAt": "2026-03-04T21:27:46.875Z"
+        },
+        {
+          "key": "submission_action_crypto_7feb29c6587a9d630778_1772659666876",
+          "updatedAt": "2026-03-04 21:27:46",
+          "submissionKey": "submission_action_crypto_7feb29c6587a9d630778_1772659666876",
+          "taskKey": "action_crypto_7feb29c6587a9d630778",
+          "opportunityKey": "crypto_7feb29c6587a9d630778",
+          "channel": "github_issue_comment",
+          "state": "failed",
+          "externalUrl": null,
+          "targetUrl": "https://github.com/leno23/leetcode-solu/issues/10",
+          "message": "GitHub submission failed (403)",
+          "error": "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}",
+          "lifecycle": {
+            "stage": "failed",
+            "acceptedSignal": false,
+            "paidSignal": false,
+            "source": "initial",
+            "confidence": 10,
+            "notes": [
+              "{\"message\":\"Resource not accessible by personal access token\",\"documentation_url\":\"https://docs.github.com/rest/issues/comments#create-an-issue-comment\",\"status\":\"403\"}"
+            ],
+            "lastCheckedAt": "2026-03-04T21:27:46.950Z"
+          },
+          "createdAt": "2026-03-04T21:27:46.950Z"
         }
       ],
       "pilotReports": []
