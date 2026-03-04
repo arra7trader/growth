@@ -1,22 +1,22 @@
 {
-  "snapshotAt": "2026-03-04T21:25:38.087Z",
+  "snapshotAt": "2026-03-04T21:26:04.206Z",
   "source": "api_evolve_status",
-  "fingerprint": "a93ea9d6ec36edc7b3c2942a8bd4bd6e1d50d239",
+  "fingerprint": "e2e1d825c784c6b05ba1ce8c5e1dc62dcfe3f274",
   "data": {
-    "capturedAt": "2026-03-04T21:25:38.087Z",
+    "capturedAt": "2026-03-04T21:26:04.206Z",
     "systemHealth": "operational",
     "systemMode": "free_real",
     "operationMode": "free_autonomous",
-    "lastActivity": "2026-03-04T21:25:37.000Z",
+    "lastActivity": "2026-03-04T21:26:04.000Z",
     "lastEvolutionAt": null,
-    "nextAutoEvolutionAt": "2026-03-05T00:25:38.001Z",
+    "nextAutoEvolutionAt": "2026-03-05T00:26:04.141Z",
     "cryptoTriggered": true,
     "admin": {
       "pilotStatus": {
         "status": "running",
-        "lastStartedAt": "2026-03-04T21:25:37.673Z",
+        "lastStartedAt": "2026-03-04T21:26:03.803Z",
         "lastFinishedAt": null,
-        "lastHeartbeatAt": "2026-03-04T21:25:37.675Z",
+        "lastHeartbeatAt": "2026-03-04T21:26:03.805Z",
         "lastError": null,
         "runner": {
           "running": true,
@@ -31,27 +31,27 @@
         "tokenSymbol": "USDT",
         "tokenContract": "0x55d398326f99059fF775485246999027B3197955",
         "configured": true,
-        "lastSyncedAt": "2026-03-04T21:25:37.859Z",
-        "lastScannedBlock": 84696546,
+        "lastSyncedAt": "2026-03-04T21:26:04.004Z",
+        "lastScannedBlock": 84696604,
         "lastError": null
       },
       "autopilotStatus": {
         "strategy": "request_driven",
         "requiresTraffic": true,
         "pulseIntervalSeconds": 45,
-        "lastPulseAt": "2026-03-04T21:25:37.861Z",
+        "lastPulseAt": "2026-03-04T21:26:04.006Z",
         "lastPulseSource": "status_get"
       },
       "cryptoStatus": {
         "status": "running",
         "intervalMinutes": 30,
-        "lastRunAt": "2026-03-04T21:25:37.984Z",
+        "lastRunAt": "2026-03-04T21:26:04.122Z",
         "lastError": null,
         "lastTotal": 0,
         "lastNew": 0,
         "lastActions": 0,
         "executor": {
-          "lastRunAt": "2026-03-04T21:25:37.967Z",
+          "lastRunAt": "2026-03-04T21:26:04.105Z",
           "lastProcessed": 0,
           "lastSubmitted": 0,
           "lastPrepared": 0,
@@ -78,7 +78,7 @@
           "usedStoredFallback": false
         },
         "maintenance": {
-          "lastRunAt": "2026-03-04T21:25:37.971Z",
+          "lastRunAt": "2026-03-04T21:26:04.108Z",
           "recoveredInProgress": 0,
           "reprioritizedQueued": 0,
           "prunedTasks": 0,
@@ -92,7 +92,7 @@
         },
         "cycleHistory": [
           {
-            "at": "2026-03-04T21:25:37.984Z",
+            "at": "2026-03-04T21:26:04.122Z",
             "total": 0,
             "newItems": 0,
             "actionItems": 0,
@@ -128,7 +128,7 @@
         ],
         "cycleHistoryLimit": 36,
         "submissionMonitor": {
-          "lastRunAt": "2026-03-04T21:25:37.980Z",
+          "lastRunAt": "2026-03-04T21:26:04.117Z",
           "intervalMinutes": 20,
           "limit": 24,
           "checked": 0,
