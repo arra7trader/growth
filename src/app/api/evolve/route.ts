@@ -630,10 +630,10 @@ async function getSystemStatus() {
     const existingMirror = await readSystemStatusMirror();
     const nextQuality = getCryptoSnapshotQuality(mirrorPayload);
     const existingQuality = getCryptoSnapshotQuality(existingMirror?.data || null);
-    const shouldWriteMirror = nextQuality >= existingQuality || existingQuality <= 0;
+    const shouldWriteMirror = nextQuality > 0 && (nextQuality >= existingQuality || existingQuality <= 0);
     const mirrorWrite = shouldWriteMirror
       ? await writeSystemStatusMirror(mirrorPayload as Record<string, unknown>, 'api_evolve_status')
-      : { written: false, reason: 'skipped_lower_quality_snapshot' };
+      : { written: false, reason: nextQuality <= 0 ? 'skipped_sparse_snapshot' : 'skipped_lower_quality_snapshot' };
 
     return {
       ...statusWithMirror,
