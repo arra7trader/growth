@@ -1,7 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import { runEvolutionCycle } from '@/lib/brain';
 import tursoClient, { initializeDatabase } from '@/lib/db';
 import { getMonetizationDashboard, initializeAffiliateLinks } from '@/lib/monetization';
@@ -16,9 +13,6 @@ const SYSTEM_MODE = 'free';
 const DEFAULT_OPERATION_MODE: OperationMode = 'free_autonomous';
 const DEFAULT_AUTO_INTERVAL_MINUTES = 180;
 const ADMIN_REPORT_LIMIT = 20;
-const PILOT_RUNNER_PID_KEY = 'pilot_runner_pid';
-const PILOT_SCRIPT_PATH = path.join(process.cwd(), 'scripts', 'pilot-bot.ts');
-const PILOT_TSX_CLI_PATH = path.join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
 
 async function ensureSystemInitialized() {
   if (!bootstrapPromise) {
@@ -71,83 +65,14 @@ async function setSetting(key: string, value: string): Promise<void> {
   });
 }
 
-function isProcessAlive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) {
-    return false;
-  }
-
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function getPilotRunnerState() {
-  const pidValue = await getSetting(PILOT_RUNNER_PID_KEY);
-  const pid = Number(pidValue);
-
-  if (!Number.isInteger(pid) || pid <= 0) {
-    return {
-      running: false,
-      pid: null as number | null,
-    };
-  }
-
-  const running = isProcessAlive(pid);
-
-  if (!running) {
-    await setSetting(PILOT_RUNNER_PID_KEY, '');
-  }
+  const status = await getSetting('pilot_bot_status');
+  const running = status !== 'stopped' && status !== 'attention';
 
   return {
     running,
-    pid: running ? pid : null,
-  };
-}
-
-async function startPilotBotProcess() {
-  const runner = await getPilotRunnerState();
-  if (runner.running) {
-    return {
-      started: false,
-      alreadyRunning: true,
-      pid: runner.pid,
-      message: 'Pilot bot is already running',
-    };
-  }
-
-  if (!existsSync(PILOT_SCRIPT_PATH)) {
-    throw new Error(`Pilot script not found: ${PILOT_SCRIPT_PATH}`);
-  }
-
-  if (!existsSync(PILOT_TSX_CLI_PATH)) {
-    throw new Error(`tsx CLI not found: ${PILOT_TSX_CLI_PATH}`);
-  }
-
-  const child = spawn(process.execPath, [PILOT_TSX_CLI_PATH, PILOT_SCRIPT_PATH], {
-    cwd: process.cwd(),
-    env: process.env,
-    detached: true,
-    stdio: 'ignore',
-  });
-
-  child.unref();
-
-  if (!child.pid) {
-    throw new Error('Failed to start pilot bot process');
-  }
-
-  await setSetting(PILOT_RUNNER_PID_KEY, String(child.pid));
-  await setSetting('pilot_bot_status', 'starting');
-  await setSetting('pilot_last_started_at', new Date().toISOString());
-
-  return {
-    started: true,
-    alreadyRunning: false,
-    pid: child.pid,
-    message: 'Pilot bot started',
+    pid: null as number | null,
+    runtime: 'serverless',
   };
 }
 
@@ -156,12 +81,22 @@ async function ensurePilotAlwaysOn() {
     pilotEnsurePromise = (async () => {
       try {
         await setSetting('pilot_auto_managed', 'true');
-        const runner = await getPilotRunnerState();
-        if (runner.running) {
-          return;
+        await setSetting('operation_mode', DEFAULT_OPERATION_MODE);
+
+        const [status, lastStarted] = await Promise.all([
+          getSetting('pilot_bot_status'),
+          getSetting('pilot_last_started_at'),
+        ]);
+
+        if (!status || status === 'idle' || status === 'starting' || status === 'stopped' || status === 'attention') {
+          await setSetting('pilot_bot_status', 'running');
         }
 
-        await startPilotBotProcess();
+        if (!lastStarted) {
+          await setSetting('pilot_last_started_at', new Date().toISOString());
+        }
+
+        await setSetting('pilot_last_heartbeat_at', new Date().toISOString());
       } catch (error) {
         console.error('Failed to ensure pilot bot is always on:', error);
         await setSetting('pilot_bot_status', 'attention');
@@ -239,19 +174,21 @@ async function getPilotReports() {
 }
 
 async function getPilotStatus() {
-  const [status, lastStarted, lastFinished, lastError, runner, autoManaged] = await Promise.all([
+  const [status, lastStarted, lastFinished, lastError, runner, autoManaged, lastHeartbeat] = await Promise.all([
     getSetting('pilot_bot_status'),
     getSetting('pilot_last_started_at'),
     getSetting('pilot_last_finished_at'),
     getSetting('pilot_last_error'),
     getPilotRunnerState(),
     getSetting('pilot_auto_managed'),
+    getSetting('pilot_last_heartbeat_at'),
   ]);
 
   return {
-    status: status || 'idle',
+    status: status || 'running',
     lastStartedAt: safeDateToISO(lastStarted),
     lastFinishedAt: safeDateToISO(lastFinished),
+    lastHeartbeatAt: safeDateToISO(lastHeartbeat),
     lastError: lastError || null,
     runner,
     autoManaged: autoManaged !== 'false',

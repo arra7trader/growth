@@ -1,5 +1,18 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
+import { Space_Grotesk, Sora } from 'next/font/google';
+
+const bodyFont = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-body',
+  weight: ['400', '500', '600', '700'],
+});
+
+const displayFont = Sora({
+  subsets: ['latin'],
+  variable: '--font-display',
+  weight: ['500', '600', '700', '800'],
+});
 
 export const metadata: Metadata = {
   title: 'Aether Auto-SaaS | Autonomous Growth System',
@@ -19,7 +32,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="bg-background text-foreground antialiased">
+      <body className={`${bodyFont.variable} ${displayFont.variable} bg-background text-foreground antialiased`}>
         {children}
       </body>
     </html>

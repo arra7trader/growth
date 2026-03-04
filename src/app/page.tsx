@@ -51,10 +51,12 @@ interface AdminPilotStatus {
   status: string;
   lastStartedAt: string | null;
   lastFinishedAt: string | null;
+  lastHeartbeatAt?: string | null;
   lastError: string | null;
   runner?: {
     running: boolean;
     pid: number | null;
+    runtime?: string;
   };
   autoManaged?: boolean;
 }
@@ -159,7 +161,7 @@ function clamp(value: number, min: number, max: number): number {
 export default function Home() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isEvolving, setIsEvolving] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
 
   useEffect(() => {
@@ -170,34 +172,20 @@ export default function Home() {
 
   async function fetchStatus() {
     try {
-      const response = await fetch('/api/evolve', { method: 'GET' });
-      const data = await response.json();
-      if (data.success) {
+      const response = await fetch('/api/evolve', { method: 'GET', cache: 'no-store' });
+      const data = (await response.json()) as { success?: boolean; data?: SystemStatus; error?: string };
+
+      if (response.ok && data.success && data.data) {
         setStatus(data.data as SystemStatus);
+        setStatusError(null);
+      } else {
+        setStatusError(data.error || `Status API failed (${response.status})`);
       }
     } catch (error) {
       console.error('Failed to fetch status:', error);
+      setStatusError(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function triggerEvolution() {
-    setIsEvolving(true);
-    try {
-      const response = await fetch('/api/evolve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'evolve' }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        await fetchStatus();
-      }
-    } catch (error) {
-      console.error('Evolution failed:', error);
-    } finally {
-      setIsEvolving(false);
     }
   }
 
@@ -233,19 +221,15 @@ export default function Home() {
                   System:{' '}
                   <span
                     className={`font-medium ${
-                      status?.systemHealth === 'operational' ? 'text-success' : 'text-warning'
+                      statusError ? 'text-warning' : status?.systemHealth === 'operational' ? 'text-success' : 'text-warning'
                     }`}
                   >
-                    {status?.systemHealth || 'Unknown'}
+                    {statusError ? 'degraded' : status?.systemHealth || 'unknown'}
                   </span>
                 </div>
-                <button
-                  onClick={triggerEvolution}
-                  disabled={isEvolving}
-                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed glow-primary"
-                >
-                  {isEvolving ? 'Evolving...' : 'Trigger Evolution'}
-                </button>
+                <span className="px-3 py-1.5 rounded-lg bg-success/20 text-success text-xs font-semibold tracking-wide uppercase">
+                  Autopilot Always On
+                </span>
               </div>
             </div>
           </div>
@@ -267,6 +251,12 @@ export default function Home() {
               </button>
             ))}
           </div>
+
+          {statusError && (
+            <div className="mb-6 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
+              Autopilot server reported issue: {statusError}
+            </div>
+          )}
 
           {activeTab === 'overview' && <OverviewTab status={status} />}
           {activeTab === 'logs' && <LogsTab logs={status?.recentLogs || []} />}
@@ -640,7 +630,9 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
           <InfoBox label="Last Error" value={pilotStatus.lastError || 'none'} accent="destructive" />
         </div>
         <div className="mt-4 text-sm text-muted-foreground">
-          Runner: {isPilotRunning ? `running (PID ${pilotStatus.runner?.pid ?? 'n/a'})` : 'stopped'}
+          Runner: {isPilotRunning ? 'running' : 'degraded'} {pilotStatus.runner?.runtime ? `(${pilotStatus.runner.runtime})` : ''}
+          {' | '}
+          Last heartbeat: {formatRelativeTime(pilotStatus.lastHeartbeatAt)}
         </div>
       </div>
 
@@ -726,7 +718,7 @@ function EvolutionTab({ history }: { history: SystemStatus['evolutionHistory'] }
         <div className="bg-card/70 rounded-xl border border-border p-8 text-center">
           <p className="text-muted-foreground">No evolution cycles recorded yet.</p>
           <p className="text-sm text-muted-foreground mt-2">
-            Click "Trigger Evolution" or wait for always-on pilot automation.
+            Always-on pilot automation will run evolution cycles automatically.
           </p>
         </div>
       )}

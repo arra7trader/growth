@@ -1,7 +1,10 @@
 import { createClient } from '@libsql/client';
 
+const isVercelRuntime = Boolean(process.env.VERCEL);
+const fallbackDbUrl = isVercelRuntime ? 'file:/tmp/aether-local.db' : 'file:local.db';
+
 const tursoClient = createClient({
-  url: process.env.TURSO_DATABASE_URL || 'file:local.db',
+  url: process.env.TURSO_DATABASE_URL || fallbackDbUrl,
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
