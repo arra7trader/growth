@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Octokit } from '@octokit/rest';
 import { getFileContent, updateFile } from './github';
+import { getGithubToken } from './github-auth';
 
 const DEFAULT_MIRROR_PATH = 'generated/runtime/system-status-mirror.json';
 const DEFAULT_MIRROR_MIN_WRITE_INTERVAL_SECONDS = 180;
@@ -19,7 +20,7 @@ export interface SystemStatusMirrorEnvelope {
 }
 
 function isMirrorEnabled(): boolean {
-  if (!process.env.GITHUB_TOKEN) {
+  if (!getGithubToken()) {
     return false;
   }
   return String(process.env.AETHER_GITHUB_MIRROR_ENABLED || 'true').toLowerCase() !== 'false';
@@ -54,10 +55,11 @@ function getMirrorIssueNumberFromEnv(): number | null {
 }
 
 function getOctokitClient(): Octokit | null {
-  if (!process.env.GITHUB_TOKEN) {
+  const token = getGithubToken();
+  if (!token) {
     return null;
   }
-  return new Octokit({ auth: process.env.GITHUB_TOKEN });
+  return new Octokit({ auth: token });
 }
 
 function getRepoOwner(): string {

@@ -1,7 +1,8 @@
 import { Octokit } from '@octokit/rest';
 import tursoClient from './db';
+import { getGithubToken } from './github-auth';
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GITHUB_TOKEN = getGithubToken();
 const GITHUB_OWNER = process.env.GITHUB_OWNER || 'arra7trader';
 const GITHUB_REPO = process.env.GITHUB_REPO || 'growth';
 

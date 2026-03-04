@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import tursoClient from './db';
+import { getGithubToken } from './github-auth';
 
 const DEFAULT_ENGINE_INTERVAL_MINUTES = 30;
 const DEFAULT_MAX_ITEMS_PER_QUERY = 20;
@@ -321,8 +322,9 @@ function getJsonHeaders() {
     'User-Agent': 'aether-auto-saas-crypto-engine',
   };
 
-  if (process.env.GITHUB_TOKEN) {
-    headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  const githubToken = getGithubToken();
+  if (githubToken) {
+    headers.Authorization = `Bearer ${githubToken}`;
   }
 
   return headers;
@@ -1419,7 +1421,7 @@ async function submitToGithubIssueComment(task: CryptoActionTask): Promise<Submi
     };
   }
 
-  if (!process.env.GITHUB_TOKEN) {
+  if (!getGithubToken()) {
     return {
       state: 'prepared',
       channel: 'outbox',
