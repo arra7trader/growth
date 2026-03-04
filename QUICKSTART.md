@@ -85,6 +85,11 @@ curl -X POST http://localhost:3000/api/track \
   - `.github/workflows/autopilot-heartbeat.yml`
 - Workflow ini mengirim pulse otomatis tiap 15 menit agar sistem tetap aktif tanpa klik dari Anda.
 
+## Auto action executor
+
+- Engine crypto otomatis membuat action queue + draft submission.
+- Pantau di dashboard tab `Admin` bagian `Crypto Revenue Engine`.
+
 Expect:
 
 - `success: true`

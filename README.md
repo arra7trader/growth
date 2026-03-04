@@ -16,6 +16,7 @@ Autonomous web app that is **100% free** and focused on growing revenue by itsel
 - Shows real revenue/traffic trend in dashboard
 - Uses fixed always-on mode: `free_autonomous`
 - Runs a crypto opportunity engine focused on no-capital pathways (bounty/grant/quest/job)
+- Auto-generates execution tasks + submission drafts for top crypto opportunities
 
 ## Stack
 
@@ -140,6 +141,12 @@ Sistem memantau transfer masuk USDT BEP20 ke wallet payout secara otomatis (tanp
 - Repository ini menyertakan workflow: `.github/workflows/autopilot-heartbeat.yml`.
 - Workflow mem-pulse production otomatis tiap 15 menit (gratis via GitHub Actions).
 - Set repo variable `APP_BASE_URL` bila domain production Anda berbeda.
+
+## Auto Action Executor
+
+- Setiap cycle, engine memilih peluang crypto skor tertinggi.
+- Sistem membuat `crypto_action_task` otomatis (priority, due time, runbook, submission draft).
+- Semua task dan draft ditampilkan di Admin panel untuk monitoring.
 
 ## Scripts
 

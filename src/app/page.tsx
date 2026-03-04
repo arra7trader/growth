@@ -122,6 +122,7 @@ interface AdminCryptoStatus {
   lastError: string | null;
   lastTotal: number;
   lastNew: number;
+  lastActions?: number;
 }
 
 interface AdminCryptoOpportunity {
@@ -134,6 +135,25 @@ interface AdminCryptoOpportunity {
   tags?: string[];
   rewardEstimateUsd?: number;
   score?: number;
+  updatedAt?: string | null;
+}
+
+interface AdminCryptoActionTask {
+  key: string;
+  opportunityKey?: string;
+  title?: string;
+  status?: string;
+  priority?: string;
+  category?: string;
+  score?: number;
+  rewardEstimateUsd?: number;
+  targetUrl?: string;
+  dueAt?: string | null;
+  runbook?: {
+    objective?: string;
+    steps?: string[];
+    submissionDraft?: string;
+  };
   updatedAt?: string | null;
 }
 
@@ -166,6 +186,7 @@ interface SystemStatus {
     autopilotStatus?: AdminAutopilotStatus;
     cryptoStatus?: AdminCryptoStatus;
     cryptoOpportunities?: AdminCryptoOpportunity[];
+    cryptoActionTasks?: AdminCryptoActionTask[];
   };
 }
 
@@ -740,6 +761,7 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
   const autopilotStatus = admin.autopilotStatus;
   const cryptoStatus = admin.cryptoStatus;
   const cryptoOpportunities = admin.cryptoOpportunities || [];
+  const cryptoActionTasks = admin.cryptoActionTasks || [];
 
   return (
     <div className="space-y-6">
@@ -812,6 +834,9 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
               <InfoBox label="Last Run" value={formatRelativeTime(cryptoStatus.lastRunAt)} />
               <InfoBox label="New / Last Cycle" value={`${safeNumber(cryptoStatus.lastNew)} / ${safeNumber(cryptoStatus.lastTotal)}`} />
             </div>
+            <div className="text-sm text-muted-foreground">
+              Auto actions generated last cycle: <span className="text-foreground">{safeNumber(cryptoStatus.lastActions)}</span>
+            </div>
             {cryptoStatus.lastError && (
               <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
                 Crypto engine issue: {cryptoStatus.lastError}
@@ -850,6 +875,47 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
                   )}
                 </div>
               ))}
+            </div>
+
+            <div className="pt-2">
+              <h3 className="text-sm font-semibold mb-2">Auto Action Executor Queue</h3>
+              <div className="space-y-2">
+                {cryptoActionTasks.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No action tasks yet. Engine will generate automatically.</p>
+                )}
+                {cryptoActionTasks.slice(0, 6).map((task) => (
+                  <div key={String(task.key)} className="rounded-lg border border-border/70 p-3">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span className="px-2 py-0.5 rounded text-xs bg-primary/20 text-primary">
+                        {String(task.status || 'queued')}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-xs bg-success/20 text-success">
+                        {String(task.priority || 'medium')}
+                      </span>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        due {formatRelativeTime(task.dueAt || null)}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium">{String(task.title || 'Untitled action')}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Objective: {String(task.runbook?.objective || 'n/a')}
+                    </p>
+                    <pre className="mt-2 text-xs text-muted-foreground bg-muted/40 p-2 rounded overflow-auto max-h-28">
+                      {String(task.runbook?.submissionDraft || 'No draft yet')}
+                    </pre>
+                    {task.targetUrl && (
+                      <a
+                        href={String(task.targetUrl)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary hover:underline mt-2 inline-block break-all"
+                      >
+                        {String(task.targetUrl)}
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

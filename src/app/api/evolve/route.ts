@@ -3,7 +3,7 @@ import { runEvolutionCycle } from '@/lib/brain';
 import tursoClient, { initializeDatabase } from '@/lib/db';
 import { getMonetizationDashboard } from '@/lib/monetization';
 import { getOnchainWalletConfig, syncOnchainUsdtPayments } from '@/lib/onchain';
-import { getCryptoEngineStatus, getCryptoOpportunities, runCryptoRevenueCycle } from '@/lib/crypto-engine';
+import { getCryptoActionTasks, getCryptoEngineStatus, getCryptoOpportunities, runCryptoRevenueCycle } from '@/lib/crypto-engine';
 
 type OperationMode = 'free_manual' | 'free_autonomous';
 
@@ -462,6 +462,7 @@ async function getSystemStatus() {
       autopilotStatus,
       cryptoStatus,
       cryptoOpportunities,
+      cryptoActionTasks,
     ] =
       await Promise.all([
         tursoClient.execute({
@@ -489,6 +490,7 @@ async function getSystemStatus() {
         getAutopilotStatus(),
         getCryptoEngineStatus(),
         getCryptoOpportunities(12),
+        getCryptoActionTasks(12),
       ]);
 
     const operationMode = DEFAULT_OPERATION_MODE;
@@ -524,6 +526,7 @@ async function getSystemStatus() {
         autopilotStatus,
         cryptoStatus,
         cryptoOpportunities,
+        cryptoActionTasks,
       },
       cryptoTriggered,
     };
@@ -577,12 +580,13 @@ export async function POST(request: NextRequest) {
       await maybeLogAutopilotActivity(source);
 
       const autonomous = await runAutonomousCheck();
-      const [pilotStatus, payoutStatus, autopilotStatus, cryptoStatus, cryptoOpportunities] = await Promise.all([
+      const [pilotStatus, payoutStatus, autopilotStatus, cryptoStatus, cryptoOpportunities, cryptoActionTasks] = await Promise.all([
         getPilotStatus(),
         getPayoutStatus(),
         getAutopilotStatus(),
         getCryptoEngineStatus(),
         getCryptoOpportunities(8),
+        getCryptoActionTasks(8),
       ]);
 
       return NextResponse.json({
@@ -595,6 +599,7 @@ export async function POST(request: NextRequest) {
             autopilotStatus,
             cryptoStatus,
             cryptoOpportunities,
+            cryptoActionTasks,
           },
         },
       });

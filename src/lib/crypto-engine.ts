@@ -34,6 +34,25 @@ export interface CryptoOpportunity {
   metadata: Record<string, unknown>;
 }
 
+export interface CryptoActionTask {
+  key: string;
+  opportunityKey: string;
+  title: string;
+  status: 'queued' | 'in_progress' | 'completed' | 'skipped';
+  priority: 'low' | 'medium' | 'high';
+  category: CryptoOpportunity['category'];
+  score: number;
+  rewardEstimateUsd: number;
+  targetUrl: string;
+  dueAt: string;
+  runbook: {
+    objective: string;
+    steps: string[];
+    submissionDraft: string;
+  };
+  updatedAt: string;
+}
+
 function safeNumber(value: unknown, fallback = 0): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -209,6 +228,78 @@ function issueToOpportunity(issue: GithubIssue): CryptoOpportunity | null {
   };
 }
 
+function actionPriority(score: number): CryptoActionTask['priority'] {
+  if (score >= 75) {
+    return 'high';
+  }
+  if (score >= 45) {
+    return 'medium';
+  }
+  return 'low';
+}
+
+function dueAtFromScore(score: number): string {
+  const hours = score >= 75 ? 6 : score >= 45 ? 18 : 36;
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
+
+function buildRunbook(opportunity: CryptoOpportunity) {
+  const objective = `Submit a high-quality ${opportunity.category} response for: ${opportunity.title}`;
+  const steps = [
+    'Read full opportunity brief and acceptance criteria.',
+    'Extract hard requirements and submission deadline.',
+    'Produce concise technical proposal aligned to requirements.',
+    'Prepare proof artifacts (links, screenshots, code references).',
+    'Submit through official channel and log submission reference.',
+  ];
+
+  const submissionDraft = [
+    `Title: ${opportunity.title}`,
+    '',
+    'Summary:',
+    `${opportunity.summary}`,
+    '',
+    'Execution Plan:',
+    '- Scope: Deliver requirements exactly as requested.',
+    '- Approach: Prioritize high-impact items with clear proof.',
+    '- Deliverables: Structured report + references + evidence.',
+    '',
+    'Why this submission should win:',
+    '- Directly aligned to success criteria.',
+    '- Fast execution timeline with verification-ready output.',
+    '- Risk controls and clear communication.',
+    '',
+    `Target URL: ${opportunity.url}`,
+  ].join('\n');
+
+  return {
+    objective,
+    steps,
+    submissionDraft,
+  };
+}
+
+function opportunityToActionTask(opportunity: CryptoOpportunity): CryptoActionTask {
+  const key = `action_${opportunity.key}`;
+  const runbook = buildRunbook(opportunity);
+  const updatedAt = new Date().toISOString();
+
+  return {
+    key,
+    opportunityKey: opportunity.key,
+    title: `Execute ${opportunity.category}: ${opportunity.title}`.slice(0, 180),
+    status: 'queued',
+    priority: actionPriority(opportunity.score),
+    category: opportunity.category,
+    score: opportunity.score,
+    rewardEstimateUsd: opportunity.rewardEstimateUsd,
+    targetUrl: opportunity.url,
+    dueAt: dueAtFromScore(opportunity.score),
+    runbook,
+    updatedAt,
+  };
+}
+
 async function upsertOpportunity(item: CryptoOpportunity): Promise<boolean> {
   const existing = await tursoClient.execute({
     sql: `
@@ -238,6 +329,43 @@ async function upsertOpportunity(item: CryptoOpportunity): Promise<boolean> {
         category: item.category,
         score: item.score,
         rewardEstimateUsd: item.rewardEstimateUsd,
+      }),
+    ],
+  });
+
+  return existing.rows.length === 0;
+}
+
+async function upsertActionTask(item: CryptoActionTask): Promise<boolean> {
+  const existing = await tursoClient.execute({
+    sql: `
+      SELECT id
+      FROM dynamic_content
+      WHERE content_type = 'crypto_action_task'
+        AND content_key = ?
+      LIMIT 1
+    `,
+    args: [item.key],
+  });
+
+  await tursoClient.execute({
+    sql: `
+      INSERT INTO dynamic_content (content_type, content_key, content_data, metadata)
+      VALUES ('crypto_action_task', ?, ?, ?)
+      ON CONFLICT(content_key) DO UPDATE SET
+        content_data = excluded.content_data,
+        metadata = excluded.metadata,
+        updated_at = CURRENT_TIMESTAMP
+    `,
+    args: [
+      item.key,
+      JSON.stringify(item),
+      JSON.stringify({
+        status: item.status,
+        priority: item.priority,
+        score: item.score,
+        rewardEstimateUsd: item.rewardEstimateUsd,
+        opportunityKey: item.opportunityKey,
       }),
     ],
   });
@@ -287,11 +415,12 @@ async function collectCryptoOpportunities(): Promise<CryptoOpportunity[]> {
 }
 
 export async function getCryptoEngineStatus() {
-  const [lastRunAt, lastError, lastTotal, lastNew, intervalValue, status] = await Promise.all([
+  const [lastRunAt, lastError, lastTotal, lastNew, lastActions, intervalValue, status] = await Promise.all([
     getSetting('crypto_engine_last_run_at'),
     getSetting('crypto_engine_last_error'),
     getSetting('crypto_engine_last_total'),
     getSetting('crypto_engine_last_new'),
+    getSetting('crypto_engine_last_actions'),
     getSetting('crypto_engine_interval_minutes'),
     getSetting('crypto_engine_status'),
   ]);
@@ -303,6 +432,7 @@ export async function getCryptoEngineStatus() {
     lastError: lastError || null,
     lastTotal: Number(lastTotal || 0) || 0,
     lastNew: Number(lastNew || 0) || 0,
+    lastActions: Number(lastActions || 0) || 0,
   };
 }
 
@@ -334,10 +464,39 @@ export async function getCryptoOpportunities(limit = 12) {
   });
 }
 
+export async function getCryptoActionTasks(limit = 12) {
+  const result = await tursoClient.execute({
+    sql: `
+      SELECT content_key, content_data, updated_at
+      FROM dynamic_content
+      WHERE content_type = 'crypto_action_task'
+      ORDER BY updated_at DESC
+      LIMIT ?
+    `,
+    args: [Math.max(1, Math.min(50, limit))],
+  });
+
+  return result.rows.map((row) => {
+    let data: Record<string, unknown> = {};
+    try {
+      data = JSON.parse(String(row.content_data || '{}'));
+    } catch {
+      data = {};
+    }
+
+    return {
+      key: row.content_key,
+      updatedAt: row.updated_at,
+      ...data,
+    };
+  });
+}
+
 export async function runCryptoRevenueCycle(): Promise<{
   success: boolean;
   total: number;
   newItems: number;
+  actionItems: number;
   topScore: number;
   error?: string;
 }> {
@@ -346,10 +505,20 @@ export async function runCryptoRevenueCycle(): Promise<{
     const opportunities = await collectCryptoOpportunities();
 
     let newItems = 0;
+    let newActions = 0;
     for (const item of opportunities) {
       const inserted = await upsertOpportunity(item);
       if (inserted) {
         newItems += 1;
+      }
+    }
+
+    const topForExecution = opportunities.slice(0, 12);
+    for (const opportunity of topForExecution) {
+      const task = opportunityToActionTask(opportunity);
+      const inserted = await upsertActionTask(task);
+      if (inserted) {
+        newActions += 1;
       }
     }
 
@@ -359,6 +528,7 @@ export async function runCryptoRevenueCycle(): Promise<{
       setSetting('crypto_engine_last_run_at', new Date().toISOString()),
       setSetting('crypto_engine_last_total', String(opportunities.length)),
       setSetting('crypto_engine_last_new', String(newItems)),
+      setSetting('crypto_engine_last_actions', String(newActions)),
       setSetting('crypto_engine_interval_minutes', String(DEFAULT_ENGINE_INTERVAL_MINUTES)),
       setSetting('crypto_engine_last_error', ''),
     ]);
@@ -366,6 +536,7 @@ export async function runCryptoRevenueCycle(): Promise<{
     await logCrypto('crypto', 'Crypto revenue engine cycle completed', {
       total: opportunities.length,
       newItems,
+      newActions,
       topScore,
       mode: 'no_capital',
     });
@@ -374,6 +545,7 @@ export async function runCryptoRevenueCycle(): Promise<{
       success: true,
       total: opportunities.length,
       newItems,
+      actionItems: newActions,
       topScore,
     };
   } catch (error: unknown) {
@@ -391,9 +563,9 @@ export async function runCryptoRevenueCycle(): Promise<{
       success: false,
       total: 0,
       newItems: 0,
+      actionItems: 0,
       topScore: 0,
       error: message,
     };
   }
 }
-
