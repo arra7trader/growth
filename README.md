@@ -140,10 +140,14 @@ Sistem memantau transfer masuk USDT BEP20 ke wallet payout secara otomatis (tanp
 
 - Untuk menghindari split-state DB lokal pada serverless, status runtime penting di-mirror ke GitHub file (`system-status-mirror.json`).
 - Mirror aktif otomatis bila `GITHUB_TOKEN` tersedia.
+- Jika token tidak punya akses `contents:write`, mirror otomatis fallback ke `GitHub issue comment`.
 - Pengaturan:
   - `AETHER_GITHUB_MIRROR_ENABLED`
+  - `AETHER_GITHUB_MIRROR_MODE` (`auto` / `repo_file` / `issue_comment`)
   - `AETHER_GITHUB_MIRROR_PATH`
   - `AETHER_GITHUB_MIRROR_MIN_WRITE_INTERVAL_SECONDS`
+  - `AETHER_GITHUB_MIRROR_ISSUE_NUMBER` (opsional)
+  - `AETHER_GITHUB_MIRROR_ISSUE_TITLE` (opsional)
 
 ## Zero-Click Heartbeat (Free)
 
