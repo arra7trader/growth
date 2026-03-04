@@ -79,6 +79,15 @@ curl -X POST http://localhost:3000/api/track \
 - Sistem pakai mode `request_driven` (tanpa cron).
 - Dashboard browser kirim heartbeat otomatis agar autopilot tetap berjalan saat ada traffic.
 
+## Opsi 2: GitHub mirror persistence
+
+- Aktif otomatis saat `GITHUB_TOKEN` tersedia.
+- Mirror menyimpan status runtime penting ke file GitHub agar tidak split-state antar instance serverless.
+- Env terkait:
+  - `AETHER_GITHUB_MIRROR_ENABLED`
+  - `AETHER_GITHUB_MIRROR_PATH`
+  - `AETHER_GITHUB_MIRROR_MIN_WRITE_INTERVAL_SECONDS`
+
 ## Zero-click mode (recommended)
 
 - GitHub Actions heartbeat sudah tersedia di:
@@ -98,6 +107,7 @@ curl -X POST http://localhost:3000/api/track \
   - prune task lama + queue guard.
 - Real Lane A aktif: engine utamakan peluang dengan sinyal `payable + submit-path`.
 - Submission lifecycle monitor otomatis cek sinyal `accepted/paid` untuk target GitHub issue.
+- Jika commit evolusi gagal karena jaringan/API, sistem auto-fallback ke local execution (`AETHER_GITHUB_EXECUTION_FALLBACK=true`).
 - Pantau di dashboard tab `Admin` bagian `Crypto Revenue Engine`.
 
 ## Tambah sumber peluang (opsional)

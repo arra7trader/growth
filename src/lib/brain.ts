@@ -330,6 +330,9 @@ export async function executeEvolutionDecision(decision: EvolutionDecision): Pro
     const result = await executeEvolution(decision.implementation);
 
     if (result.success) {
+      if (result.error) {
+        await logActivity('warn', 'Evolution executed with local fallback', result);
+      }
       await logActivity('success', 'Evolution executed successfully', result);
     } else {
       await logActivity('error', 'Evolution execution failed', result);

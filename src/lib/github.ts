@@ -239,6 +239,7 @@ export async function executeEvolution(proposal: EvolutionProposal): Promise<{
   error?: string;
 }> {
   const timestamp = new Date().toISOString();
+  const allowNetworkFallback = String(process.env.AETHER_GITHUB_EXECUTION_FALLBACK || 'true').toLowerCase() !== 'false';
 
   if (shouldUseLocalExecution()) {
     await storeLocalGeneratedContent(proposal);
@@ -263,6 +264,16 @@ export async function executeEvolution(proposal: EvolutionProposal): Promise<{
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
+    if (allowNetworkFallback) {
+      await storeLocalGeneratedContent(proposal);
+      await logEvolution(proposal, 'degraded_local_fallback');
+
+      return {
+        success: true,
+        url: `internal://evolution-fallback/${timestamp}`,
+        error: `github_commit_failed: ${message}`,
+      };
+    }
 
     await logEvolution(proposal, 'failed');
 

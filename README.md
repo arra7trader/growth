@@ -136,6 +136,15 @@ Sistem memantau transfer masuk USDT BEP20 ke wallet payout secara otomatis (tanp
 - Browser dashboard mengirim heartbeat berkala (`pulse`) untuk menjaga siklus otomatis tetap jalan.
 - Tanpa traffic/event sama sekali, serverless tidak akan terus aktif 24/7.
 
+## GitHub Mirror Persistence (Option 2)
+
+- Untuk menghindari split-state DB lokal pada serverless, status runtime penting di-mirror ke GitHub file (`system-status-mirror.json`).
+- Mirror aktif otomatis bila `GITHUB_TOKEN` tersedia.
+- Pengaturan:
+  - `AETHER_GITHUB_MIRROR_ENABLED`
+  - `AETHER_GITHUB_MIRROR_PATH`
+  - `AETHER_GITHUB_MIRROR_MIN_WRITE_INTERVAL_SECONDS`
+
 ## Zero-Click Heartbeat (Free)
 
 - Repository ini menyertakan workflow: `.github/workflows/autopilot-heartbeat.yml`.
@@ -159,6 +168,7 @@ Sistem memantau transfer masuk USDT BEP20 ke wallet payout secara otomatis (tanp
 - Histori cycle disimpan otomatis dan divisualisasikan di Admin panel (`Cycle Growth Trend`).
 - Real Lane A aktif: engine memprioritaskan peluang yang terdeteksi `payable + clear submission path`.
 - Submission lifecycle monitor mengecek sinyal `accepted/paid` dari target GitHub issue secara otomatis.
+- Jika commit evolusi ke GitHub gagal (mis. gangguan TLS/network), sistem fallback otomatis ke `local execution` agar cycle tetap sukses (`AETHER_GITHUB_EXECUTION_FALLBACK=true`).
 
 ## Source Enrichment
 

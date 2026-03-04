@@ -4,6 +4,7 @@ import tursoClient, { initializeDatabase } from '@/lib/db';
 import { getMonetizationDashboard } from '@/lib/monetization';
 import { getOnchainWalletConfig, syncOnchainUsdtPayments } from '@/lib/onchain';
 import { getCryptoActionTasks, getCryptoEngineStatus, getCryptoOpportunities, getCryptoSubmissions, runCryptoRevenueCycle } from '@/lib/crypto-engine';
+import { readSystemStatusMirror, writeSystemStatusMirror } from '@/lib/system-status-mirror';
 
 type OperationMode = 'free_manual' | 'free_autonomous';
 
@@ -259,6 +260,89 @@ function parseJson(value: unknown) {
   }
 }
 
+function toMs(value: unknown): number {
+  const d = value ? new Date(String(value)).getTime() : NaN;
+  return Number.isFinite(d) ? d : 0;
+}
+
+function safeNumber(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function buildMirrorPayload(status: Record<string, any>) {
+  return {
+    capturedAt: new Date().toISOString(),
+    systemHealth: status.systemHealth || 'unknown',
+    systemMode: status.systemMode || SYSTEM_MODE,
+    operationMode: status.operationMode || DEFAULT_OPERATION_MODE,
+    lastActivity: status.lastActivity || null,
+    lastEvolutionAt: status.lastEvolutionAt || null,
+    nextAutoEvolutionAt: status.nextAutoEvolutionAt || null,
+    cryptoTriggered: Boolean(status.cryptoTriggered),
+    admin: {
+      pilotStatus: status.admin?.pilotStatus || null,
+      payoutStatus: status.admin?.payoutStatus || null,
+      autopilotStatus: status.admin?.autopilotStatus || null,
+      cryptoStatus: status.admin?.cryptoStatus || null,
+      cryptoOpportunities: Array.isArray(status.admin?.cryptoOpportunities) ? status.admin.cryptoOpportunities : [],
+      cryptoActionTasks: Array.isArray(status.admin?.cryptoActionTasks) ? status.admin.cryptoActionTasks : [],
+      cryptoSubmissions: Array.isArray(status.admin?.cryptoSubmissions) ? status.admin.cryptoSubmissions : [],
+      pilotReports: Array.isArray(status.admin?.pilotReports) ? status.admin.pilotReports.slice(0, 8) : [],
+    },
+  };
+}
+
+function shouldPreferMirror(liveStatus: Record<string, any>, mirrorData: Record<string, any> | null): boolean {
+  if (!mirrorData) {
+    return false;
+  }
+
+  const liveCrypto = liveStatus.admin?.cryptoStatus || {};
+  const mirrorCrypto = mirrorData.admin?.cryptoStatus || {};
+  const liveRunMs = toMs(liveCrypto.lastRunAt);
+  const mirrorRunMs = toMs(mirrorCrypto.lastRunAt);
+
+  const liveLooksSparse =
+    !liveRunMs ||
+    (safeNumber(liveCrypto.lastTotal) === 0 &&
+      safeNumber(liveCrypto.sources?.github) === 0 &&
+      safeNumber(liveCrypto.sources?.queries) >= 1 &&
+      safeNumber(liveCrypto.lastActions) === 0);
+
+  return mirrorRunMs > liveRunMs && liveLooksSparse;
+}
+
+function applyMirror(liveStatus: Record<string, any>, mirrorData: Record<string, any>) {
+  return {
+    ...liveStatus,
+    lastActivity: liveStatus.lastActivity || mirrorData.lastActivity || null,
+    lastEvolutionAt: liveStatus.lastEvolutionAt || mirrorData.lastEvolutionAt || null,
+    nextAutoEvolutionAt: liveStatus.nextAutoEvolutionAt || mirrorData.nextAutoEvolutionAt || null,
+    admin: {
+      ...(liveStatus.admin || {}),
+      cryptoStatus: mirrorData.admin?.cryptoStatus || liveStatus.admin?.cryptoStatus || null,
+      cryptoOpportunities:
+        Array.isArray(liveStatus.admin?.cryptoOpportunities) && liveStatus.admin.cryptoOpportunities.length > 0
+          ? liveStatus.admin.cryptoOpportunities
+          : mirrorData.admin?.cryptoOpportunities || [],
+      cryptoActionTasks:
+        Array.isArray(liveStatus.admin?.cryptoActionTasks) && liveStatus.admin.cryptoActionTasks.length > 0
+          ? liveStatus.admin.cryptoActionTasks
+          : mirrorData.admin?.cryptoActionTasks || [],
+      cryptoSubmissions:
+        Array.isArray(liveStatus.admin?.cryptoSubmissions) && liveStatus.admin.cryptoSubmissions.length > 0
+          ? liveStatus.admin.cryptoSubmissions
+          : mirrorData.admin?.cryptoSubmissions || [],
+    },
+    mirror: {
+      used: true,
+      source: 'github_status_mirror',
+      snapshotAt: mirrorData.capturedAt || null,
+    },
+  };
+}
+
 async function getPilotReports() {
   const result = await tursoClient.execute({
     sql: `
@@ -358,34 +442,6 @@ async function getAutopilotStatus() {
     pulseIntervalSeconds: Number(pulseInterval || DEFAULT_PULSE_INTERVAL_SECONDS) || DEFAULT_PULSE_INTERVAL_SECONDS,
     lastPulseAt: safeDateToISO(lastPulseAt),
     lastPulseSource: lastPulseSource || null,
-  };
-}
-
-async function runAutonomousCheck() {
-  const cryptoTriggered = await maybeTriggerCryptoEngine(true);
-  const [intervalValue, evolutionResult] = await Promise.all([
-    getSetting('auto_interval_minutes'),
-    tursoClient.execute({
-      sql: 'SELECT created_at FROM evolution_history ORDER BY created_at DESC LIMIT 1',
-      args: [],
-    }),
-  ]);
-
-  const operationMode = DEFAULT_OPERATION_MODE;
-  const autoIntervalMinutes = Number(intervalValue || DEFAULT_AUTO_INTERVAL_MINUTES) || DEFAULT_AUTO_INTERVAL_MINUTES;
-  const lastEvolutionAt = safeDateToISO(evolutionResult.rows[0]?.created_at);
-  const autoEvolutionTriggered = maybeTriggerAutonomousEvolution(operationMode, autoIntervalMinutes, lastEvolutionAt);
-  const nextAutoEvolutionAt = lastEvolutionAt
-    ? new Date(new Date(lastEvolutionAt).getTime() + autoIntervalMinutes * 60 * 1000).toISOString()
-    : new Date(Date.now() + autoIntervalMinutes * 60 * 1000).toISOString();
-
-  return {
-    operationMode,
-    autoIntervalMinutes,
-    lastEvolutionAt,
-    nextAutoEvolutionAt,
-    autoEvolutionTriggered,
-    cryptoTriggered,
   };
 }
 
@@ -514,7 +570,7 @@ async function getSystemStatus() {
       ? new Date(new Date(lastEvolutionAt).getTime() + autoIntervalMinutes * 60 * 1000).toISOString()
       : new Date(Date.now() + autoIntervalMinutes * 60 * 1000).toISOString();
 
-    return {
+    const liveStatus = {
       lastActivity: safeDateToISO(logsResult.rows[0]?.created_at),
       recentLogs: logsResult.rows,
       latestMetrics: metricsResult.rows,
@@ -542,6 +598,22 @@ async function getSystemStatus() {
         cryptoSubmissions,
       },
       cryptoTriggered,
+    };
+
+    const mirror = await readSystemStatusMirror();
+    const statusWithMirror = shouldPreferMirror(liveStatus, mirror?.data || null)
+      ? applyMirror(liveStatus, mirror?.data || {})
+      : liveStatus;
+
+    const mirrorPayload = buildMirrorPayload(statusWithMirror);
+    const mirrorWrite = await writeSystemStatusMirror(mirrorPayload as Record<string, unknown>, 'api_evolve_status');
+
+    return {
+      ...statusWithMirror,
+      mirror: {
+        ...(statusWithMirror as Record<string, any>).mirror,
+        write: mirrorWrite.reason,
+      },
     };
   } catch (error) {
     return {
@@ -591,32 +663,11 @@ export async function POST(request: NextRequest) {
       const source = sanitizePulseSource(body.source, 'browser_heartbeat');
       await markAutopilotPulse(source);
       await maybeLogAutopilotActivity(source);
-
-      const autonomous = await runAutonomousCheck();
-      const [pilotStatus, payoutStatus, autopilotStatus, cryptoStatus, cryptoOpportunities, cryptoActionTasks, cryptoSubmissions] = await Promise.all([
-        getPilotStatus(),
-        getPayoutStatus(),
-        getAutopilotStatus(),
-        getCryptoEngineStatus(),
-        getCryptoOpportunities(8),
-        getCryptoActionTasks(8),
-        getCryptoSubmissions(8),
-      ]);
+      const status = await getSystemStatus();
 
       return NextResponse.json({
         success: true,
-        data: {
-          ...autonomous,
-          admin: {
-            pilotStatus,
-            payoutStatus,
-            autopilotStatus,
-            cryptoStatus,
-            cryptoOpportunities,
-            cryptoActionTasks,
-            cryptoSubmissions,
-          },
-        },
+        data: status,
       });
     }
 
