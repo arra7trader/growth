@@ -74,6 +74,11 @@ curl -X POST http://localhost:3000/api/track \
   - `0x84a06ffc26031b782c893252a769bd146bca8ad0`
 - Cek sinkronisasi on-chain di dashboard tab `Admin` bagian `USDT Payout Monitor`.
 
+## No-cron autopilot
+
+- Sistem pakai mode `request_driven` (tanpa cron).
+- Dashboard browser kirim heartbeat otomatis agar autopilot tetap berjalan saat ada traffic.
+
 Expect:
 
 - `success: true`

@@ -17,6 +17,7 @@ const DEFAULT_OPERATION_MODE: OperationMode = 'free_autonomous';
 const DEFAULT_AUTO_INTERVAL_MINUTES = 180;
 const ADMIN_REPORT_LIMIT = 20;
 const ONCHAIN_SYNC_INTERVAL_MS = 90 * 1000;
+const DEFAULT_PULSE_INTERVAL_SECONDS = 45;
 
 async function ensureSystemInitialized() {
   if (!bootstrapPromise) {
@@ -70,6 +71,19 @@ async function setSetting(key: string, value: string): Promise<void> {
   });
 }
 
+function sanitizePulseSource(value: unknown, fallback: string): string {
+  const source = String(value || fallback).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
+  return source.slice(0, 64) || fallback;
+}
+
+async function markAutopilotPulse(source: string) {
+  const now = new Date().toISOString();
+  await Promise.all([
+    setSetting('autopilot_last_pulse_at', now),
+    setSetting('autopilot_last_pulse_source', source),
+  ]);
+}
+
 async function maybeSyncOnchainPayments() {
   if (onchainSyncPromise) {
     await onchainSyncPromise;
@@ -111,6 +125,9 @@ async function ensurePilotAlwaysOn() {
       try {
         await setSetting('pilot_auto_managed', 'true');
         await setSetting('operation_mode', DEFAULT_OPERATION_MODE);
+        await setSetting('autopilot_strategy', 'request_driven');
+        await setSetting('autopilot_requires_traffic', 'true');
+        await setSetting('autopilot_pulse_interval_seconds', String(DEFAULT_PULSE_INTERVAL_SECONDS));
 
         const [status, lastStarted] = await Promise.all([
           getSetting('pilot_bot_status'),
@@ -244,6 +261,50 @@ async function getPayoutStatus() {
   };
 }
 
+async function getAutopilotStatus() {
+  const [strategy, requiresTraffic, pulseInterval, lastPulseAt, lastPulseSource] = await Promise.all([
+    getSetting('autopilot_strategy'),
+    getSetting('autopilot_requires_traffic'),
+    getSetting('autopilot_pulse_interval_seconds'),
+    getSetting('autopilot_last_pulse_at'),
+    getSetting('autopilot_last_pulse_source'),
+  ]);
+
+  return {
+    strategy: strategy || 'request_driven',
+    requiresTraffic: requiresTraffic !== 'false',
+    pulseIntervalSeconds: Number(pulseInterval || DEFAULT_PULSE_INTERVAL_SECONDS) || DEFAULT_PULSE_INTERVAL_SECONDS,
+    lastPulseAt: safeDateToISO(lastPulseAt),
+    lastPulseSource: lastPulseSource || null,
+  };
+}
+
+async function runAutonomousCheck() {
+  const [intervalValue, evolutionResult] = await Promise.all([
+    getSetting('auto_interval_minutes'),
+    tursoClient.execute({
+      sql: 'SELECT created_at FROM evolution_history ORDER BY created_at DESC LIMIT 1',
+      args: [],
+    }),
+  ]);
+
+  const operationMode = DEFAULT_OPERATION_MODE;
+  const autoIntervalMinutes = Number(intervalValue || DEFAULT_AUTO_INTERVAL_MINUTES) || DEFAULT_AUTO_INTERVAL_MINUTES;
+  const lastEvolutionAt = safeDateToISO(evolutionResult.rows[0]?.created_at);
+  const autoEvolutionTriggered = maybeTriggerAutonomousEvolution(operationMode, autoIntervalMinutes, lastEvolutionAt);
+  const nextAutoEvolutionAt = lastEvolutionAt
+    ? new Date(new Date(lastEvolutionAt).getTime() + autoIntervalMinutes * 60 * 1000).toISOString()
+    : new Date(Date.now() + autoIntervalMinutes * 60 * 1000).toISOString();
+
+  return {
+    operationMode,
+    autoIntervalMinutes,
+    lastEvolutionAt,
+    nextAutoEvolutionAt,
+    autoEvolutionTriggered,
+  };
+}
+
 async function getRevenueTrend() {
   const result = await tursoClient.execute({
     sql: `
@@ -324,6 +385,7 @@ async function getSystemStatus() {
       pilotStatus,
       pilotReports,
       payoutStatus,
+      autopilotStatus,
     ] =
       await Promise.all([
         tursoClient.execute({
@@ -348,6 +410,7 @@ async function getSystemStatus() {
         getPilotStatus(),
         getPilotReports(),
         getPayoutStatus(),
+        getAutopilotStatus(),
       ]);
 
     const operationMode = DEFAULT_OPERATION_MODE;
@@ -379,6 +442,7 @@ async function getSystemStatus() {
         pilotStatus,
         pilotReports,
         payoutStatus,
+        autopilotStatus,
       },
     };
   } catch (error) {
@@ -415,10 +479,35 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'status') {
+      await markAutopilotPulse(sanitizePulseSource(body.source, 'status_post'));
       const status = await getSystemStatus();
       return NextResponse.json({
         success: true,
         data: status,
+      });
+    }
+
+    if (action === 'pulse') {
+      const source = sanitizePulseSource(body.source, 'browser_heartbeat');
+      await markAutopilotPulse(source);
+
+      const autonomous = await runAutonomousCheck();
+      const [pilotStatus, payoutStatus, autopilotStatus] = await Promise.all([
+        getPilotStatus(),
+        getPayoutStatus(),
+        getAutopilotStatus(),
+      ]);
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          ...autonomous,
+          admin: {
+            pilotStatus,
+            payoutStatus,
+            autopilotStatus,
+          },
+        },
       });
     }
 
@@ -448,6 +537,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   try {
     await ensureSystemInitialized();
+    await markAutopilotPulse('status_get');
     const status = await getSystemStatus();
     return NextResponse.json({
       success: true,

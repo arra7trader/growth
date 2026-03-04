@@ -127,6 +127,12 @@ Sistem memantau transfer masuk USDT BEP20 ke wallet payout secara otomatis (tanp
 - Endpoint sinkronisasi dijalankan otomatis saat API status/evolve dipanggil
 - Status sinkronisasi dan error tampil di tab `Admin`
 
+## Request-Driven Autopilot (No Cron)
+
+- Mode autopilot dikunci ke `request_driven` (gratis, tanpa cron).
+- Browser dashboard mengirim heartbeat berkala (`pulse`) untuk menjaga siklus otomatis tetap jalan.
+- Tanpa traffic/event sama sekali, serverless tidak akan terus aktif 24/7.
+
 ## Scripts
 
 - `npm run dev`

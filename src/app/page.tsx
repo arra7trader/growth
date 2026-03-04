@@ -107,6 +107,14 @@ interface AdminPayoutStatus {
   lastError: string | null;
 }
 
+interface AdminAutopilotStatus {
+  strategy: string;
+  requiresTraffic: boolean;
+  pulseIntervalSeconds: number;
+  lastPulseAt: string | null;
+  lastPulseSource: string | null;
+}
+
 interface SystemStatus {
   lastActivity: string | null;
   recentLogs: Log[];
@@ -132,6 +140,7 @@ interface SystemStatus {
     pilotStatus: AdminPilotStatus;
     pilotReports: AdminPilotReport[];
     payoutStatus?: AdminPayoutStatus;
+    autopilotStatus?: AdminAutopilotStatus;
   };
 }
 
@@ -209,9 +218,50 @@ export default function Home() {
       // Tracking is best-effort and must not break UI.
     });
 
-    const interval = setInterval(() => void fetchStatus(), 10000);
-    return () => clearInterval(interval);
+    void sendAutopilotPulse();
+
+    const statusInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void fetchStatus();
+      }
+    }, 30000);
+
+    const pulseInterval = setInterval(() => {
+      void sendAutopilotPulse();
+    }, 45000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchStatus();
+        void sendAutopilotPulse();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(pulseInterval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, []);
+
+  async function sendAutopilotPulse() {
+    try {
+      await fetch('/api/evolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        keepalive: true,
+        body: JSON.stringify({
+          action: 'pulse',
+          source: 'browser_heartbeat',
+        }),
+      });
+    } catch {
+      // Pulse is best-effort and should stay silent on failures.
+    }
+  }
 
   async function fetchStatus() {
     try {
@@ -662,6 +712,7 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
   const { pilotStatus, pilotReports } = admin;
   const isPilotRunning = Boolean(pilotStatus.runner?.running);
   const payoutStatus = admin.payoutStatus;
+  const autopilotStatus = admin.autopilotStatus;
 
   return (
     <div className="space-y-6">
@@ -678,6 +729,24 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
           {' | '}
           Last heartbeat: {formatRelativeTime(pilotStatus.lastHeartbeatAt)}
         </div>
+      </div>
+
+      <div className="bg-card/70 rounded-xl border border-border p-6">
+        <h2 className="text-lg font-semibold mb-4">Autopilot Mode</h2>
+        {!autopilotStatus && <p className="text-sm text-muted-foreground">Autopilot status not available yet.</p>}
+        {autopilotStatus && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <InfoBox label="Strategy" value={autopilotStatus.strategy} accent="primary" />
+              <InfoBox label="Requires Traffic" value={autopilotStatus.requiresTraffic ? 'yes' : 'no'} />
+              <InfoBox label="Pulse Interval" value={`${autopilotStatus.pulseIntervalSeconds}s`} />
+              <InfoBox label="Last Pulse" value={formatRelativeTime(autopilotStatus.lastPulseAt)} />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Pulse source: <span className="text-foreground">{autopilotStatus.lastPulseSource || 'n/a'}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-card/70 rounded-xl border border-border p-6">
