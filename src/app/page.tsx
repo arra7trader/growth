@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 
 type OperationMode = 'free_manual' | 'free_autonomous';
@@ -56,6 +56,7 @@ interface AdminPilotStatus {
     running: boolean;
     pid: number | null;
   };
+  autoManaged?: boolean;
 }
 
 interface AdminPilotReport {
@@ -105,7 +106,7 @@ interface SystemStatus {
     github_commit_hash: string | null;
     created_at: string;
   }>;
-  activeContent: any[];
+  activeContent: unknown[];
   monetization: MonetizationData;
   systemHealth: string;
   systemMode: 'free';
@@ -121,20 +122,38 @@ interface SystemStatus {
 }
 
 function safeNumber(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function formatCurrency(value: unknown): string {
   return `$${safeNumber(value).toFixed(2)}`;
 }
 
+function formatRelativeTime(value: string | null | undefined): string {
+  if (!value) {
+    return 'n/a';
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    return 'n/a';
+  }
+  return formatDistanceToNow(d, { addSuffix: true });
+}
+
 function labelForMode(mode?: OperationMode): string {
   if (mode === 'free_manual') {
     return 'FREE MANUAL';
   }
-
   return 'FREE AUTONOMOUS';
+}
+
+function normalizeTrend(points: RevenuePoint[]): RevenuePoint[] {
+  return [...points].reverse();
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 export default function Home() {
@@ -145,10 +164,7 @@ export default function Home() {
 
   useEffect(() => {
     void fetchStatus();
-    const interval = setInterval(() => {
-      void fetchStatus();
-    }, 10000);
-
+    const interval = setInterval(() => void fetchStatus(), 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -185,81 +201,81 @@ export default function Home() {
     }
   }
 
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center aurora-bg">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Initializing autonomous free system...</p>
+          <p className="text-muted-foreground">Booting autonomous growth engine...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="w-3 h-3 bg-success rounded-full live-indicator" />
-              <h1 className="text-2xl font-bold gradient-text">AETHER AUTO-SaaS</h1>
-              <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded-full">v1.1.0</span>
-              <span className="text-xs px-2 py-1 rounded-full bg-success/20 text-success">100% FREE</span>
-              <span className="text-xs px-2 py-1 rounded-full bg-primary/20 text-primary">
-                {labelForMode(status?.operationMode)}
-              </span>
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">System:</span>
-                <span
-                  className={`font-medium ${
-                    status?.systemHealth === 'operational' ? 'text-success' : 'text-warning'
-                  }`}
-                >
-                  {status?.systemHealth || 'Unknown'}
+    <div className="min-h-screen aurora-bg">
+      <div className="bg-grid min-h-screen">
+        <header className="border-b border-border/70 bg-card/40 backdrop-blur-md sticky top-0 z-50">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="w-3 h-3 bg-success rounded-full live-indicator" />
+                <h1 className="text-2xl font-black tracking-tight gradient-text">AETHER AUTO-SaaS</h1>
+                <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded-full">v1.2.0</span>
+                <span className="text-xs px-2 py-1 rounded-full bg-success/20 text-success">100% FREE</span>
+                <span className="text-xs px-2 py-1 rounded-full bg-primary/20 text-primary">
+                  {labelForMode(status?.operationMode)}
                 </span>
               </div>
 
-              <button
-                onClick={triggerEvolution}
-                disabled={isEvolving}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all glow-primary"
-              >
-                {isEvolving ? 'Evolving...' : 'Trigger Evolution'}
-              </button>
+              <div className="flex items-center gap-3">
+                <div className="text-sm text-muted-foreground">
+                  System:{' '}
+                  <span
+                    className={`font-medium ${
+                      status?.systemHealth === 'operational' ? 'text-success' : 'text-warning'
+                    }`}
+                  >
+                    {status?.systemHealth || 'Unknown'}
+                  </span>
+                </div>
+                <button
+                  onClick={triggerEvolution}
+                  disabled={isEvolving}
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed glow-primary"
+                >
+                  {isEvolving ? 'Evolving...' : 'Trigger Evolution'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex flex-wrap gap-2 mb-6 border-b border-border">
-          {(['overview', 'logs', 'metrics', 'monetization', 'evolution', 'admin'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-                activeTab === tab
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
-        </div>
+        <main className="container mx-auto px-4 py-8">
+          <div className="flex flex-wrap gap-2 mb-8">
+            {(['overview', 'logs', 'metrics', 'monetization', 'evolution', 'admin'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                  activeTab === tab
+                    ? 'bg-primary/20 text-primary border border-primary/40'
+                    : 'bg-card/50 border border-border/70 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </div>
 
-        {activeTab === 'overview' && <OverviewTab status={status} />}
-        {activeTab === 'logs' && <LogsTab logs={status?.recentLogs || []} />}
-        {activeTab === 'metrics' && <MetricsTab metrics={status?.latestMetrics || []} />}
-        {activeTab === 'monetization' && <MonetizationTab monetization={status?.monetization} />}
-        {activeTab === 'evolution' && <EvolutionTab history={status?.evolutionHistory || []} />}
-        {activeTab === 'admin' && <AdminTab admin={status?.admin} />}
-      </main>
+          {activeTab === 'overview' && <OverviewTab status={status} />}
+          {activeTab === 'logs' && <LogsTab logs={status?.recentLogs || []} />}
+          {activeTab === 'metrics' && <MetricsTab metrics={status?.latestMetrics || []} />}
+          {activeTab === 'monetization' && <MonetizationTab monetization={status?.monetization} />}
+          {activeTab === 'evolution' && <EvolutionTab history={status?.evolutionHistory || []} />}
+          {activeTab === 'admin' && <AdminTab admin={status?.admin} />}
+        </main>
+      </div>
     </div>
   );
 }
@@ -269,54 +285,85 @@ function OverviewTab({ status }: { status: SystemStatus | null }) {
     return null;
   }
 
-  const traffic = status.latestMetrics.find((m) => m.metric_type === 'traffic');
-  const revenue = status.latestMetrics.find((m) => m.metric_type === 'revenue');
+  const trend = normalizeTrend(status.monetization?.revenueTrend || []);
+  const revenueSeries = trend.map((item) => safeNumber(item.revenue));
+  const trafficSeries = trend.map((item) => safeNumber(item.visitors));
+  const latestTraffic = safeNumber(status.latestMetrics.find((m) => m.metric_type === 'traffic')?.value);
+  const latestRevenue = safeNumber(status.latestMetrics.find((m) => m.metric_type === 'revenue')?.value);
+  const growthScore = clamp(
+    Math.round(
+      safeNumber(status.monetization?.totalRevenue) * 0.8 +
+        status.evolutionHistory.length * 2 +
+        status.activeContent.length * 1.5 +
+        latestTraffic / 20
+    ),
+    0,
+    100
+  );
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Traffic" value={Math.round(safeNumber(traffic?.value))} unit="visitors/day" />
-        <StatCard title="Revenue" value={formatCurrency(revenue?.value)} unit="USD/day" />
-        <StatCard title="Evolution Cycles" value={status.evolutionHistory.length} unit="cycles" />
-        <StatCard
-          title="Autonomous Interval"
-          value={`${status.autoIntervalMinutes}m`}
-          unit="auto-cycle cadence"
-        />
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="panel-glow bg-card/70 border border-border rounded-xl p-5 lg:col-span-2">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Growth Pulse</p>
+          <h2 className="text-2xl font-bold">Autonomous Website Progress</h2>
+          <p className="text-sm text-muted-foreground mt-2">
+            Pilot berjalan terus, memproses evolusi, dan menaikkan metrik revenue/traffic otomatis.
+          </p>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <TrendPanel
+              title="Revenue Momentum"
+              value={formatCurrency(latestRevenue)}
+              subtitle="Latest daily revenue"
+              values={revenueSeries}
+              color="hsl(var(--success))"
+            />
+            <TrendPanel
+              title="Traffic Momentum"
+              value={`${Math.round(latestTraffic)} visitors`}
+              subtitle="Latest daily traffic"
+              values={trafficSeries}
+              color="hsl(var(--primary))"
+            />
+          </div>
+        </div>
 
-      <div className="bg-card rounded-lg border border-border p-6">
-        <h2 className="text-lg font-semibold mb-4">Autonomous Control</h2>
-        <div className="space-y-2 text-sm">
-          <p>
-            Mode: <span className="text-primary font-medium">{labelForMode(status.operationMode)}</span>
-          </p>
-          <p>
-            Last evolution:{' '}
-            <span className="text-primary font-medium">
-              {status.lastEvolutionAt
-                ? formatDistanceToNow(new Date(status.lastEvolutionAt), { addSuffix: true })
-                : 'not yet'}
-            </span>
-          </p>
-          <p>
-            Next autonomous run:{' '}
-            <span className="text-primary font-medium">
-              {status.nextAutoEvolutionAt
-                ? formatDistanceToNow(new Date(status.nextAutoEvolutionAt), { addSuffix: true })
-                : 'pending'}
-            </span>
-          </p>
-          {status.autoEvolutionTriggered && (
-            <p className="text-success">Autonomous cycle was just triggered automatically.</p>
-          )}
+        <div className="bg-card/70 border border-border rounded-xl p-5">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Growth Score</p>
+          <GrowthScore score={growthScore} />
+          <div className="mt-4 space-y-2 text-sm">
+            <p>
+              Last evolution:{' '}
+              <span className="text-primary font-medium">{formatRelativeTime(status.lastEvolutionAt)}</span>
+            </p>
+            <p>
+              Next cycle:{' '}
+              <span className="text-primary font-medium">{formatRelativeTime(status.nextAutoEvolutionAt)}</span>
+            </p>
+            <p>
+              Auto interval:{' '}
+              <span className="text-primary font-medium">{status.autoIntervalMinutes}m</span>
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border border-border p-6">
-        <h2 className="text-lg font-semibold mb-4">Recent Activity</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard title="Traffic" value={Math.round(latestTraffic)} unit="visitors/day" tone="primary" />
+        <StatCard title="Revenue" value={formatCurrency(latestRevenue)} unit="USD/day" tone="success" />
+        <StatCard title="Evolution Cycles" value={status.evolutionHistory.length} unit="cycles" tone="primary" />
+        <StatCard
+          title="30d Revenue"
+          value={formatCurrency(status.monetization?.totalRevenue)}
+          unit="USD / 30 days"
+          tone="success"
+        />
+      </div>
+
+      <div className="bg-card/70 border border-border rounded-xl p-6">
+        <h3 className="text-lg font-semibold mb-4">Recent Autonomous Activity</h3>
         <div className="space-y-3">
-          {status.recentLogs.slice(0, 6).map((log) => (
+          {status.recentLogs.slice(0, 8).map((log) => (
             <div key={log.id} className="flex items-start gap-3 text-sm">
               <span
                 className={`px-2 py-0.5 rounded text-xs font-medium ${
@@ -332,9 +379,7 @@ function OverviewTab({ status }: { status: SystemStatus | null }) {
                 {log.level}
               </span>
               <span className="flex-1">{log.message}</span>
-              <span className="text-muted-foreground text-xs">
-                {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
-              </span>
+              <span className="text-muted-foreground text-xs">{formatRelativeTime(log.created_at)}</span>
             </div>
           ))}
         </div>
@@ -343,25 +388,122 @@ function OverviewTab({ status }: { status: SystemStatus | null }) {
   );
 }
 
-function StatCard({ title, value, unit }: { title: string; value: string | number; unit: string }) {
+function StatCard({
+  title,
+  value,
+  unit,
+  tone,
+}: {
+  title: string;
+  value: string | number;
+  unit: string;
+  tone: 'primary' | 'success';
+}) {
   return (
-    <div className="bg-card rounded-lg border border-border p-4 hover:border-primary/50 transition-colors">
-      <p className="text-2xl font-bold text-foreground">{value}</p>
+    <div
+      className={`bg-card/70 border rounded-xl p-4 transition-all ${
+        tone === 'success' ? 'border-success/30 hover:border-success/50' : 'border-primary/30 hover:border-primary/50'
+      }`}
+    >
+      <p className="text-2xl font-bold">{value}</p>
       <p className="text-sm text-muted-foreground">{title}</p>
       <p className="text-xs text-muted-foreground mt-1">{unit}</p>
     </div>
   );
 }
 
+function TrendPanel({
+  title,
+  value,
+  subtitle,
+  values,
+  color,
+}: {
+  title: string;
+  value: string;
+  subtitle: string;
+  values: number[];
+  color: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border/80 bg-muted/30 p-3">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{title}</p>
+      <p className="text-lg font-semibold mt-1">{value}</p>
+      <p className="text-xs text-muted-foreground">{subtitle}</p>
+      <div className="mt-3">
+        <MiniLineChart values={values} color={color} />
+      </div>
+    </div>
+  );
+}
+
+function MiniLineChart({ values, color }: { values: number[]; color: string }) {
+  const width = 320;
+  const height = 90;
+  const pad = 8;
+  const points = values.length > 0 ? values : [0];
+  const max = Math.max(...points, 1);
+  const min = Math.min(...points, 0);
+  const range = max - min || 1;
+  const stepX = points.length > 1 ? (width - pad * 2) / (points.length - 1) : 0;
+
+  const coords = points.map((v, i) => {
+    const x = pad + i * stepX;
+    const y = height - pad - ((v - min) / range) * (height - pad * 2);
+    return { x, y };
+  });
+
+  const path = coords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
+  const areaPath =
+    coords.length > 1
+      ? `${path} L ${coords[coords.length - 1].x} ${height - pad} L ${coords[0].x} ${height - pad} Z`
+      : '';
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-20">
+      <defs>
+        <linearGradient id={`g-${color.replace(/[^a-z0-9]/gi, '')}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      {areaPath && (
+        <path fill={`url(#g-${color.replace(/[^a-z0-9]/gi, '')})`} d={areaPath} />
+      )}
+      <path d={path} fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function GrowthScore({ score }: { score: number }) {
+  const clamped = clamp(score, 0, 100);
+  const ringStyle = {
+    background: `conic-gradient(hsl(var(--success)) ${clamped * 3.6}deg, hsl(var(--muted)) 0deg)`,
+  };
+
+  return (
+    <div className="flex items-center justify-center">
+      <div className="relative w-36 h-36 rounded-full p-2" style={ringStyle}>
+        <div className="w-full h-full rounded-full bg-card flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-3xl font-black">{clamped}</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Growth</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LogsTab({ logs }: { logs: Log[] }) {
   return (
-    <div className="bg-card rounded-lg border border-border">
+    <div className="bg-card/70 rounded-xl border border-border overflow-hidden">
       <div className="p-4 border-b border-border">
         <h2 className="text-lg font-semibold">System Logs</h2>
       </div>
       <div className="divide-y divide-border">
         {logs.map((log) => (
-          <div key={log.id} className="p-4 hover:bg-muted/50 transition-colors">
+          <div key={log.id} className="p-4 hover:bg-muted/40 transition-colors">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
@@ -381,14 +523,12 @@ function LogsTab({ logs }: { logs: Log[] }) {
                   <span className="text-sm font-medium">{log.message}</span>
                 </div>
                 {log.context && (
-                  <pre className="text-xs text-muted-foreground bg-muted/50 p-2 rounded overflow-auto max-h-32">
+                  <pre className="text-xs text-muted-foreground bg-muted/40 p-2 rounded overflow-auto max-h-32">
                     {log.context}
                   </pre>
                 )}
               </div>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
-              </span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">{formatRelativeTime(log.created_at)}</span>
             </div>
           </div>
         ))}
@@ -399,9 +539,9 @@ function LogsTab({ logs }: { logs: Log[] }) {
 
 function MetricsTab({ metrics }: { metrics: Metric[] }) {
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {metrics.map((metric) => (
-        <div key={metric.id} className="bg-card rounded-lg border border-border p-4">
+        <div key={metric.id} className="bg-card/70 rounded-xl border border-border p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">{metric.metric_name}</p>
@@ -412,9 +552,7 @@ function MetricsTab({ metrics }: { metrics: Metric[] }) {
               <p className="text-xs text-muted-foreground">{metric.unit}</p>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-3">
-            Recorded {formatDistanceToNow(new Date(metric.created_at), { addSuffix: true })}
-          </p>
+          <p className="text-xs text-muted-foreground mt-3">Recorded {formatRelativeTime(metric.created_at)}</p>
         </div>
       ))}
     </div>
@@ -426,38 +564,39 @@ function MonetizationTab({ monetization }: { monetization?: MonetizationData }) 
     return null;
   }
 
+  const trend = normalizeTrend(monetization.revenueTrend || []).slice(-7);
+  const maxRevenue = Math.max(...trend.map((item) => safeNumber(item.revenue)), 1);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard title="Total Revenue (30d)" value={formatCurrency(monetization.totalRevenue)} unit="USD" />
-        <StatCard
-          title="Affiliate Revenue (30d)"
-          value={formatCurrency(monetization.affiliateRevenue)}
-          unit="USD"
-        />
-        <StatCard title="Micro-SaaS Revenue (30d)" value={formatCurrency(monetization.saasRevenue)} unit="USD" />
+        <StatCard title="Total Revenue (30d)" value={formatCurrency(monetization.totalRevenue)} unit="USD" tone="success" />
+        <StatCard title="Affiliate Revenue (30d)" value={formatCurrency(monetization.affiliateRevenue)} unit="USD" tone="success" />
+        <StatCard title="Micro-SaaS Revenue (30d)" value={formatCurrency(monetization.saasRevenue)} unit="USD" tone="primary" />
       </div>
 
-      <div className="bg-card rounded-lg border border-border p-6">
-        <h2 className="text-lg font-semibold mb-4">Revenue Trend (14 days)</h2>
-        <div className="space-y-2">
-          {monetization.revenueTrend.length === 0 && (
-            <p className="text-sm text-muted-foreground">No revenue trend data yet.</p>
-          )}
-          {monetization.revenueTrend.map((point) => (
-            <div key={point.day} className="flex items-center justify-between text-sm border-b border-border/60 py-2">
-              <span>{point.day}</span>
-              <span className="text-muted-foreground">
-                Visitors: {safeNumber(point.visitors).toFixed(0)} | Affiliate:{' '}
-                {formatCurrency(point.affiliate_revenue)} | SaaS: {formatCurrency(point.saas_revenue)} | Total:{' '}
-                {formatCurrency(point.revenue)}
-              </span>
-            </div>
-          ))}
+      <div className="bg-card/70 border border-border rounded-xl p-6">
+        <h2 className="text-lg font-semibold mb-4">Revenue Growth Graph (Last 7 Days)</h2>
+        <div className="space-y-3">
+          {trend.length === 0 && <p className="text-sm text-muted-foreground">No trend data yet.</p>}
+          {trend.map((point) => {
+            const widthPercent = (safeNumber(point.revenue) / maxRevenue) * 100;
+            return (
+              <div key={point.day}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-muted-foreground">{point.day}</span>
+                  <span className="text-foreground font-medium">{formatCurrency(point.revenue)}</span>
+                </div>
+                <div className="h-2 bg-muted/60 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-primary to-success" style={{ width: `${widthPercent}%` }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border border-border p-6">
+      <div className="bg-card/70 border border-border rounded-xl p-6">
         <h2 className="text-lg font-semibold mb-4">Top Affiliate Opportunities</h2>
         <div className="space-y-2">
           {monetization.topAffiliates.length === 0 && (
@@ -478,23 +617,10 @@ function MonetizationTab({ monetization }: { monetization?: MonetizationData }) 
   );
 }
 
-function formatRelativeTime(value: string | null | undefined): string {
-  if (!value) {
-    return 'n/a';
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return 'n/a';
-  }
-
-  return formatDistanceToNow(date, { addSuffix: true });
-}
-
 function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
   if (!admin) {
     return (
-      <div className="bg-card rounded-lg border border-border p-6">
+      <div className="bg-card/70 rounded-xl border border-border p-6">
         <p className="text-sm text-muted-foreground">Admin data not available yet.</p>
       </div>
     );
@@ -505,93 +631,53 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-card rounded-lg border border-border p-6">
+      <div className="bg-card/70 rounded-xl border border-border p-6">
         <h2 className="text-lg font-semibold mb-4">Pilot Bot Status</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-          <div className="bg-muted/30 rounded p-3">
-            <p className="text-muted-foreground">Status</p>
-            <p className="font-medium text-primary">{pilotStatus.status || 'unknown'}</p>
-          </div>
-          <div className="bg-muted/30 rounded p-3">
-            <p className="text-muted-foreground">Last Started</p>
-            <p className="font-medium">{formatRelativeTime(pilotStatus.lastStartedAt)}</p>
-          </div>
-          <div className="bg-muted/30 rounded p-3">
-            <p className="text-muted-foreground">Last Finished</p>
-            <p className="font-medium">{formatRelativeTime(pilotStatus.lastFinishedAt)}</p>
-          </div>
-          <div className="bg-muted/30 rounded p-3">
-            <p className="text-muted-foreground">Last Error</p>
-            <p className="font-medium text-destructive">{pilotStatus.lastError || 'none'}</p>
-          </div>
+          <InfoBox label="Status" value={pilotStatus.status || 'unknown'} accent="primary" />
+          <InfoBox label="Last Started" value={formatRelativeTime(pilotStatus.lastStartedAt)} />
+          <InfoBox label="Last Finished" value={formatRelativeTime(pilotStatus.lastFinishedAt)} />
+          <InfoBox label="Last Error" value={pilotStatus.lastError || 'none'} accent="destructive" />
         </div>
-        <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="text-sm text-muted-foreground">
-            Runner: {isPilotRunning ? `running (PID ${pilotStatus.runner?.pid ?? 'n/a'})` : 'stopped'}
-          </div>
-          <div className="text-xs px-2 py-1 rounded-md bg-primary/10 text-primary">
-            always-on automation enabled
-          </div>
+        <div className="mt-4 text-sm text-muted-foreground">
+          Runner: {isPilotRunning ? `running (PID ${pilotStatus.runner?.pid ?? 'n/a'})` : 'stopped'}
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border border-border p-6">
+      <div className="bg-card/70 rounded-xl border border-border p-6">
         <h2 className="text-lg font-semibold mb-4">Pilot Reports</h2>
         <div className="space-y-4">
           {pilotReports.length === 0 && (
             <p className="text-sm text-muted-foreground">No pilot reports yet. Pilot will publish automatically.</p>
           )}
-
           {pilotReports.map((item) => {
             const report = item.report;
-
             return (
-              <div key={item.id} className="border border-border rounded-lg p-4">
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-primary/20 text-primary">
-                      {report?.reportId || item.key}
-                    </span>
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-success/20 text-success">
-                      health: {report?.health?.status || 'unknown'}
-                    </span>
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
-                      cycle: {report?.cycle ?? 'n/a'}
-                    </span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
+              <div key={item.id} className="border border-border/70 rounded-lg p-4">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-primary/20 text-primary">
+                    {report?.reportId || item.key}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-success/20 text-success">
+                    health: {report?.health?.status || 'unknown'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+                    cycle: {report?.cycle ?? 'n/a'}
+                  </span>
+                  <span className="text-xs text-muted-foreground ml-auto">
                     {formatRelativeTime(report?.generatedAt || item.updatedAt)}
                   </span>
                 </div>
-
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                  <div className="bg-muted/30 rounded p-2">
-                    <p className="text-muted-foreground">Revenue 24h</p>
-                    <p className="font-medium">{formatCurrency(report?.kpi?.revenue24h)}</p>
-                  </div>
-                  <div className="bg-muted/30 rounded p-2">
-                    <p className="text-muted-foreground">Revenue 7d</p>
-                    <p className="font-medium">{formatCurrency(report?.kpi?.revenue7d)}</p>
-                  </div>
-                  <div className="bg-muted/30 rounded p-2">
-                    <p className="text-muted-foreground">Traffic</p>
-                    <p className="font-medium">{safeNumber(report?.kpi?.latestTraffic).toFixed(0)}</p>
-                  </div>
-                  <div className="bg-muted/30 rounded p-2">
-                    <p className="text-muted-foreground">CTR 7d</p>
-                    <p className="font-medium">{(safeNumber(report?.kpi?.avgCtr7d) * 100).toFixed(2)}%</p>
-                  </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                  <InfoBox label="Revenue 24h" value={formatCurrency(report?.kpi?.revenue24h)} />
+                  <InfoBox label="Revenue 7d" value={formatCurrency(report?.kpi?.revenue7d)} />
+                  <InfoBox label="Traffic" value={safeNumber(report?.kpi?.latestTraffic).toFixed(0)} />
+                  <InfoBox label="CTR 7d" value={`${(safeNumber(report?.kpi?.avgCtr7d) * 100).toFixed(2)}%`} />
                 </div>
-
-                <div className="mt-3 text-sm text-muted-foreground">
-                  <p>
-                    Evolution: {String(report?.actions?.evolutionTriggered)} /{' '}
-                    {String(report?.actions?.evolutionSuccess)} | Strategy:{' '}
-                    {report?.actions?.adStrategy || 'n/a'}
-                  </p>
-                  {item.metadata?.mdPath && <p>Markdown: {item.metadata.mdPath}</p>}
-                  {item.metadata?.jsonPath && <p>JSON: {item.metadata.jsonPath}</p>}
-                </div>
+                <p className="text-sm text-muted-foreground mt-3">
+                  Evolution: {String(report?.actions?.evolutionTriggered)} / {String(report?.actions?.evolutionSuccess)}
+                  {' | '}Strategy: {report?.actions?.adStrategy || 'n/a'}
+                </p>
               </div>
             );
           })}
@@ -601,66 +687,66 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
   );
 }
 
+function InfoBox({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: 'primary' | 'destructive';
+}) {
+  return (
+    <div className="bg-muted/30 rounded p-3">
+      <p className="text-muted-foreground text-xs">{label}</p>
+      <p className={`font-medium ${accent === 'primary' ? 'text-primary' : accent === 'destructive' ? 'text-destructive' : ''}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function EvolutionTab({ history }: { history: SystemStatus['evolutionHistory'] }) {
-  const isGitCommitHash = (value: unknown) => typeof value === 'string' && /^[0-9a-f]{7,40}$/i.test(value);
+  const parsed = useMemo(() => {
+    return history.map((evolution) => {
+      let decisionPreview = evolution.decision_data;
+      try {
+        const obj = JSON.parse(evolution.decision_data);
+        decisionPreview = JSON.stringify(obj, null, 2);
+      } catch {
+        decisionPreview = evolution.decision_data;
+      }
+      return { ...evolution, decisionPreview };
+    });
+  }, [history]);
 
   return (
     <div className="space-y-4">
-      {history.length === 0 ? (
-        <div className="bg-card rounded-lg border border-border p-8 text-center">
+      {parsed.length === 0 && (
+        <div className="bg-card/70 rounded-xl border border-border p-8 text-center">
           <p className="text-muted-foreground">No evolution cycles recorded yet.</p>
           <p className="text-sm text-muted-foreground mt-2">
             Click "Trigger Evolution" or wait for always-on pilot automation.
           </p>
         </div>
-      ) : (
-        history.map((evolution) => {
-          let prettyDecision = evolution.decision_data;
-          try {
-            prettyDecision = JSON.stringify(JSON.parse(evolution.decision_data), null, 2);
-          } catch {
-            prettyDecision = evolution.decision_data;
-          }
-
-          return (
-            <div key={evolution.id} className="bg-card rounded-lg border border-border p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-primary/20 text-primary">
-                      {evolution.decision_type}
-                    </span>
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-success/20 text-success">
-                      {evolution.implementation_status}
-                    </span>
-                  </div>
-                  <pre className="text-sm text-muted-foreground bg-muted/50 p-3 rounded overflow-auto max-h-48">
-                    {prettyDecision}
-                  </pre>
-                  {isGitCommitHash(evolution.github_commit_hash) && (
-                    <a
-                      href={`https://github.com/arra7trader/growth/commit/${evolution.github_commit_hash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline mt-2 inline-block"
-                    >
-                      View Commit
-                    </a>
-                  )}
-                  {!isGitCommitHash(evolution.github_commit_hash) && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Local free evolution simulation saved to database.
-                    </p>
-                  )}
-                </div>
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {formatDistanceToNow(new Date(evolution.created_at), { addSuffix: true })}
-                </span>
-              </div>
-            </div>
-          );
-        })
       )}
+
+      {parsed.map((evolution) => (
+        <div key={evolution.id} className="bg-card/70 rounded-xl border border-border p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="px-2 py-0.5 rounded text-xs font-medium bg-primary/20 text-primary">
+              {evolution.decision_type}
+            </span>
+            <span className="px-2 py-0.5 rounded text-xs font-medium bg-success/20 text-success">
+              {evolution.implementation_status}
+            </span>
+            <span className="ml-auto text-xs text-muted-foreground">{formatRelativeTime(evolution.created_at)}</span>
+          </div>
+          <pre className="text-sm text-muted-foreground bg-muted/40 p-3 rounded overflow-auto max-h-48">
+            {evolution.decisionPreview}
+          </pre>
+        </div>
+      ))}
     </div>
   );
 }
