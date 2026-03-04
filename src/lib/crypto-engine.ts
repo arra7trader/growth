@@ -182,6 +182,9 @@ interface CryptoCycleSnapshot {
     laneEligible: number;
     automationReady: number;
     strictRealLane: boolean;
+    queryFailures: number;
+    feedFailures: number;
+    usedStoredFallback: boolean;
   };
   maintenance: {
     recoveredInProgress: number;
@@ -195,6 +198,20 @@ interface CryptoCycleSnapshot {
     acceptedSignals: number;
     paidSignals: number;
   };
+}
+
+interface SourceStatsSummary {
+  github: number;
+  feed: number;
+  total: number;
+  queries: number;
+  feeds: number;
+  laneEligible: number;
+  automationReady: number;
+  strictRealLane: boolean;
+  queryFailures: number;
+  feedFailures: number;
+  usedStoredFallback: boolean;
 }
 
 function safeNumber(value: unknown, fallback = 0): number {
@@ -836,6 +853,65 @@ function parseActionTaskRecord(contentKey: unknown, contentData: unknown, update
   } catch {
     return null;
   }
+}
+
+function parseOpportunityRecord(contentKey: unknown, contentData: unknown, updatedAt: unknown): CryptoOpportunity | null {
+  try {
+    const parsed = JSON.parse(String(contentData || '{}')) as Partial<CryptoOpportunity>;
+    if (!parsed || typeof parsed !== 'object' || !parsed.key || !parsed.url || !parsed.title) {
+      return null;
+    }
+
+    return {
+      key: String(parsed.key || contentKey || ''),
+      source: String(parsed.source || 'unknown'),
+      category: (parsed.category as CryptoOpportunity['category']) || 'bounty',
+      title: String(parsed.title || ''),
+      url: String(parsed.url || ''),
+      summary: String(parsed.summary || ''),
+      tags: Array.isArray(parsed.tags) ? parsed.tags.map((item) => String(item)).slice(0, 12) : [],
+      rewardEstimateUsd: safeNumber(parsed.rewardEstimateUsd),
+      score: safeNumber(parsed.score),
+      monetization: {
+        payableLikely: Boolean(parsed.monetization?.payableLikely),
+        clearSubmissionPath: Boolean(parsed.monetization?.clearSubmissionPath),
+        noCapitalFriendly: Boolean(parsed.monetization?.noCapitalFriendly),
+        automationReady: Boolean(parsed.monetization?.automationReady),
+        laneEligible: Boolean(parsed.monetization?.laneEligible),
+        confidence: safeNumber(parsed.monetization?.confidence, 35),
+        payoutSignals: Array.isArray(parsed.monetization?.payoutSignals)
+          ? parsed.monetization?.payoutSignals.map((item) => String(item)).slice(0, 8)
+          : [],
+        submissionSignals: Array.isArray(parsed.monetization?.submissionSignals)
+          ? parsed.monetization?.submissionSignals.map((item) => String(item)).slice(0, 8)
+          : [],
+        blockers: Array.isArray(parsed.monetization?.blockers)
+          ? parsed.monetization?.blockers.map((item) => String(item)).slice(0, 8)
+          : [],
+      },
+      updatedAt: String(parsed.updatedAt || updatedAt || new Date().toISOString()),
+      metadata: (parsed.metadata as Record<string, unknown>) || {},
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function loadStoredOpportunities(limit = DEFAULT_STORE_LIMIT): Promise<CryptoOpportunity[]> {
+  const result = await tursoClient.execute({
+    sql: `
+      SELECT content_key, content_data, updated_at
+      FROM dynamic_content
+      WHERE content_type = 'crypto_opportunity'
+      ORDER BY updated_at DESC
+      LIMIT ?
+    `,
+    args: [Math.max(1, Math.min(100, limit))],
+  });
+
+  return result.rows
+    .map((row) => parseOpportunityRecord(row.content_key, row.content_data, row.updated_at))
+    .filter((item): item is CryptoOpportunity => Boolean(item));
 }
 
 async function upsertOpportunity(item: CryptoOpportunity): Promise<boolean> {
@@ -1959,16 +2035,7 @@ async function appendCycleHistory(snapshot: CryptoCycleSnapshot) {
 
 async function collectCryptoOpportunities(): Promise<{
   opportunities: CryptoOpportunity[];
-  sourceStats: {
-    github: number;
-    feed: number;
-    total: number;
-    queries: number;
-    feeds: number;
-    laneEligible: number;
-    automationReady: number;
-    strictRealLane: boolean;
-  };
+  sourceStats: SourceStatsSummary;
 }> {
   const queries = getGithubQueries();
   const feedUrls = getFeedUrls();
@@ -1976,30 +2043,46 @@ async function collectCryptoOpportunities(): Promise<{
   const issuesByQuery = await Promise.all(
     queries.map(async (query) => {
       try {
-        return await fetchGithubIssues(query);
+        return {
+          ok: true,
+          items: await fetchGithubIssues(query),
+        };
       } catch {
-        return [];
+        return {
+          ok: false,
+          items: [] as GithubIssue[],
+        };
       }
     })
   );
+  const queryFailures = issuesByQuery.filter((item) => !item.ok).length;
 
   const githubCandidates = issuesByQuery
     .flat()
+    .flatMap((item) => item.items)
     .map((issue) => issueToOpportunity(issue))
     .filter((item): item is CryptoOpportunity => Boolean(item));
 
   const feedItemsByUrl = await Promise.all(
     feedUrls.map(async (feedUrl) => {
       try {
-        return await fetchFeedItems(feedUrl);
+        return {
+          ok: true,
+          items: await fetchFeedItems(feedUrl),
+        };
       } catch {
-        return [];
+        return {
+          ok: false,
+          items: [] as FeedOpportunityRaw[],
+        };
       }
     })
   );
+  const feedFailures = feedItemsByUrl.filter((item) => !item.ok).length;
 
   const feedCandidates = feedItemsByUrl
     .flat()
+    .flatMap((item) => item.items)
     .map((item) => feedItemToOpportunity(item))
     .filter((candidate): candidate is CryptoOpportunity => Boolean(candidate));
 
@@ -2019,9 +2102,22 @@ async function collectCryptoOpportunities(): Promise<{
   const laneEligible = opportunities.filter((item) => item.monetization.laneEligible);
   const automationReadyCount = opportunities.filter((item) => item.monetization.automationReady).length;
   const selectedPool = strictRealLane && laneEligible.length > 0 ? laneEligible : opportunities;
+  let usedStoredFallback = false;
 
   selectedPool.sort((a, b) => b.score - a.score || b.rewardEstimateUsd - a.rewardEstimateUsd);
-  const limited = selectedPool.slice(0, DEFAULT_STORE_LIMIT);
+  let limited = selectedPool.slice(0, DEFAULT_STORE_LIMIT);
+
+  if (
+    limited.length === 0 &&
+    opportunities.length === 0 &&
+    (queryFailures >= Math.max(1, queries.length) || feedFailures >= Math.max(1, feedUrls.length))
+  ) {
+    const stored = await loadStoredOpportunities(DEFAULT_STORE_LIMIT);
+    if (stored.length > 0) {
+      usedStoredFallback = true;
+      limited = stored;
+    }
+  }
 
   return {
     opportunities: limited,
@@ -2034,6 +2130,9 @@ async function collectCryptoOpportunities(): Promise<{
       laneEligible: laneEligible.length,
       automationReady: automationReadyCount,
       strictRealLane,
+      queryFailures,
+      feedFailures,
+      usedStoredFallback,
     },
   };
 }
@@ -2064,6 +2163,9 @@ export async function getCryptoEngineStatus() {
     sourceLaneEligible,
     sourceAutomationReady,
     sourceStrictRealLane,
+    sourceQueryFailures,
+    sourceFeedFailures,
+    sourceUsedStoredFallback,
     maintenanceLastRunAt,
     maintenanceRecovered,
     maintenanceReprioritized,
@@ -2110,6 +2212,9 @@ export async function getCryptoEngineStatus() {
     getSetting('crypto_engine_last_lane_eligible_count'),
     getSetting('crypto_engine_last_automation_ready_count'),
     getSetting('crypto_engine_strict_real_lane'),
+    getSetting('crypto_engine_last_query_failures'),
+    getSetting('crypto_engine_last_feed_failures'),
+    getSetting('crypto_engine_last_used_stored_fallback'),
     getSetting('crypto_maintenance_last_run_at'),
     getSetting('crypto_maintenance_last_recovered_in_progress'),
     getSetting('crypto_maintenance_last_reprioritized_queued'),
@@ -2190,6 +2295,9 @@ export async function getCryptoEngineStatus() {
       laneEligible: Number(sourceLaneEligible || 0) || 0,
       automationReady: Number(sourceAutomationReady || 0) || 0,
       strictRealLane: sourceStrictRealLane !== 'false',
+      queryFailures: Number(sourceQueryFailures || 0) || 0,
+      feedFailures: Number(sourceFeedFailures || 0) || 0,
+      usedStoredFallback: sourceUsedStoredFallback === 'true',
     },
     maintenance: {
       lastRunAt: maintenanceLastRunAt || null,
@@ -2325,6 +2433,9 @@ export async function runCryptoRevenueCycle(): Promise<{
     laneEligible: number;
     automationReady: number;
     strictRealLane: boolean;
+    queryFailures: number;
+    feedFailures: number;
+    usedStoredFallback: boolean;
   };
   topScore: number;
   maintenance: {
@@ -2398,6 +2509,9 @@ export async function runCryptoRevenueCycle(): Promise<{
         laneEligible: collected.sourceStats.laneEligible,
         automationReady: collected.sourceStats.automationReady,
         strictRealLane: collected.sourceStats.strictRealLane,
+        queryFailures: collected.sourceStats.queryFailures,
+        feedFailures: collected.sourceStats.feedFailures,
+        usedStoredFallback: collected.sourceStats.usedStoredFallback,
       },
       maintenance: {
         recoveredInProgress: maintenance.recoveredInProgress,
@@ -2426,6 +2540,9 @@ export async function runCryptoRevenueCycle(): Promise<{
       setSetting('crypto_engine_last_lane_eligible_count', String(collected.sourceStats.laneEligible)),
       setSetting('crypto_engine_last_automation_ready_count', String(collected.sourceStats.automationReady)),
       setSetting('crypto_engine_strict_real_lane', String(collected.sourceStats.strictRealLane)),
+      setSetting('crypto_engine_last_query_failures', String(collected.sourceStats.queryFailures)),
+      setSetting('crypto_engine_last_feed_failures', String(collected.sourceStats.feedFailures)),
+      setSetting('crypto_engine_last_used_stored_fallback', String(collected.sourceStats.usedStoredFallback)),
       setSetting('crypto_engine_interval_minutes', String(DEFAULT_ENGINE_INTERVAL_MINUTES)),
       setSetting('crypto_engine_last_error', ''),
     ]);
@@ -2445,6 +2562,13 @@ export async function runCryptoRevenueCycle(): Promise<{
       submissionMonitor,
       mode: 'real_lane_a',
     });
+
+    if (collected.sourceStats.usedStoredFallback) {
+      await logCrypto('warn', 'Crypto engine used stored opportunities fallback', {
+        queryFailures: collected.sourceStats.queryFailures,
+        feedFailures: collected.sourceStats.feedFailures,
+      });
+    }
 
     return {
       success: true,
@@ -2489,6 +2613,9 @@ export async function runCryptoRevenueCycle(): Promise<{
         laneEligible: 0,
         automationReady: 0,
         strictRealLane: true,
+        queryFailures: 0,
+        feedFailures: 0,
+        usedStoredFallback: false,
       },
       topScore: 0,
       maintenance: {
