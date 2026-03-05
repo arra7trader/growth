@@ -14,8 +14,10 @@ const DEFAULT_ACTIVE_TASK_LIMIT = 120;
 const DEFAULT_CYCLE_HISTORY_LIMIT = 36;
 const DEFAULT_SUBMISSION_MONITOR_INTERVAL_MINUTES = 20;
 const DEFAULT_SUBMISSION_MONITOR_LIMIT = 24;
+const DEFAULT_GITHUB_ACCESS_CACHE_TTL_MS = 20 * 60 * 1000;
 
 let runtimeOpportunityCache: CryptoOpportunity[] = [];
+const githubRepoAccessCache = new Map<string, { allowed: boolean; reason: string; checkedAt: number }>();
 
 const DEFAULT_GITHUB_QUERIES = [
   'web3 bounty is:issue in:title,body state:open',
@@ -802,6 +804,95 @@ function parseGithubIssueLikeUrl(url: string): { owner: string; repo: string; nu
   };
 }
 
+async function getGithubRepoWriteAccess(
+  owner: string,
+  repo: string
+): Promise<{ allowed: boolean; reason: string }> {
+  const cacheKey = `${owner}/${repo}`.toLowerCase();
+  const now = Date.now();
+  const cached = githubRepoAccessCache.get(cacheKey);
+  if (cached && now - cached.checkedAt < DEFAULT_GITHUB_ACCESS_CACHE_TTL_MS) {
+    return {
+      allowed: cached.allowed,
+      reason: cached.reason,
+    };
+  }
+
+  const endpoint = `https://api.github.com/repos/${owner}/${repo}`;
+  try {
+    const response = await fetch(endpoint, {
+      headers: getJsonHeaders(),
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      const reason = `repo_http_${response.status}`;
+      githubRepoAccessCache.set(cacheKey, {
+        allowed: false,
+        reason,
+        checkedAt: now,
+      });
+      return {
+        allowed: false,
+        reason,
+      };
+    }
+
+    const body = (await response.json()) as {
+      permissions?: {
+        pull?: boolean;
+        triage?: boolean;
+        push?: boolean;
+        maintain?: boolean;
+        admin?: boolean;
+      };
+    };
+
+    const permissions = body.permissions || {};
+    const allowed = Boolean(
+      permissions.push || permissions.triage || permissions.maintain || permissions.admin
+    );
+    const reason = allowed ? 'write_access_granted' : 'no_repo_write_permission';
+
+    githubRepoAccessCache.set(cacheKey, {
+      allowed,
+      reason,
+      checkedAt: now,
+    });
+
+    return {
+      allowed,
+      reason,
+    };
+  } catch (error: unknown) {
+    const reason = error instanceof Error ? error.message : String(error);
+    githubRepoAccessCache.set(cacheKey, {
+      allowed: false,
+      reason,
+      checkedAt: now,
+    });
+    return {
+      allowed: false,
+      reason,
+    };
+  }
+}
+
+function classifyGithubCommentFailure(
+  status: number,
+  rawError: string
+): { permanent: boolean; shortError: string } {
+  const shortError = rawError.slice(0, 400);
+  const permanentStatuses = new Set([401, 403, 404, 422]);
+  const permanentKeywords = ['resource not accessible', 'insufficient', 'forbidden', 'not found', 'validation failed'];
+  const text = shortError.toLowerCase();
+  const permanentByText = permanentKeywords.some((keyword) => text.includes(keyword));
+  return {
+    permanent: permanentStatuses.has(status) || permanentByText,
+    shortError,
+  };
+}
+
 function buildAutoSubmissionComment(task: CryptoActionTask): string {
   const stepLines = task.runbook.steps.map((step, index) => `${index + 1}. ${step}`).join('\n');
 
@@ -1431,6 +1522,18 @@ async function submitToGithubIssueComment(task: CryptoActionTask): Promise<Submi
     };
   }
 
+  const access = await getGithubRepoWriteAccess(parsed.owner, parsed.repo);
+  if (!access.allowed) {
+    return {
+      state: 'skipped',
+      channel: 'outbox',
+      externalUrl: task.targetUrl,
+      submissionKey,
+      message: `Skipped GitHub submission: no write access to ${parsed.owner}/${parsed.repo}. Draft kept in outbox.`,
+      error: access.reason,
+    };
+  }
+
   const endpoint = `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/issues/${parsed.number}/comments`;
   const payload = {
     body: buildAutoSubmissionComment(task),
@@ -1449,13 +1552,24 @@ async function submitToGithubIssueComment(task: CryptoActionTask): Promise<Submi
 
     if (!response.ok) {
       const text = await response.text();
+      const classified = classifyGithubCommentFailure(response.status, text);
+      if (classified.permanent) {
+        return {
+          state: 'skipped',
+          channel: 'outbox',
+          externalUrl: task.targetUrl,
+          submissionKey,
+          message: `Skipped GitHub submission (${response.status}): permanent access/validation issue.`,
+          error: classified.shortError,
+        };
+      }
       return {
         state: 'failed',
         channel: 'github_issue_comment',
         externalUrl: null,
         submissionKey,
         message: `GitHub submission failed (${response.status})`,
-        error: text.slice(0, 400),
+        error: classified.shortError,
       };
     }
 
