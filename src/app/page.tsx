@@ -115,6 +115,42 @@ interface AdminAutopilotStatus {
   lastPulseSource: string | null;
 }
 
+interface AdminRevenueFunnel {
+  visitors24h: number;
+  clicks24h: number;
+  affiliateSalesUsd24h: number;
+  saasSalesUsd24h: number;
+}
+
+interface AdminRevenueBlocker {
+  severity: 'warning' | 'critical' | string;
+  code: string;
+  message: string;
+}
+
+interface AdminDormantWalletIntel {
+  generatedAt: string;
+  chain: string;
+  source: string;
+  scannedWallets: number;
+  totalEstimatedUsd: number;
+  collectibleEstimatedUsd: number;
+  inaccessibleEstimatedUsd: number;
+  note: string;
+  candidates: Array<{
+    address: string;
+    label: string;
+    category: string;
+    nativeBalance: number;
+    usdtBalance: number;
+    estimatedUsd: number;
+    txCount: number;
+    dormantLikely: boolean;
+    collectible: boolean;
+    reason: string;
+  }>;
+}
+
 interface AdminCryptoStatus {
   status: string;
   intervalMinutes: number;
@@ -299,6 +335,9 @@ interface SystemStatus {
     pilotReports: AdminPilotReport[];
     payoutStatus?: AdminPayoutStatus;
     autopilotStatus?: AdminAutopilotStatus;
+    revenueFunnel?: AdminRevenueFunnel;
+    revenueBlockers?: AdminRevenueBlocker[];
+    dormantWalletIntel?: AdminDormantWalletIntel;
     cryptoStatus?: AdminCryptoStatus;
     cryptoOpportunities?: AdminCryptoOpportunity[];
     cryptoActionTasks?: AdminCryptoActionTask[];
@@ -947,6 +986,9 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
   const isPilotRunning = Boolean(pilotStatus.runner?.running);
   const payoutStatus = admin.payoutStatus;
   const autopilotStatus = admin.autopilotStatus;
+  const revenueFunnel = admin.revenueFunnel;
+  const revenueBlockers = admin.revenueBlockers || [];
+  const dormantWalletIntel = admin.dormantWalletIntel;
   const cryptoStatus = admin.cryptoStatus;
   const cryptoOpportunities = admin.cryptoOpportunities || [];
   const cryptoActionTasks = admin.cryptoActionTasks || [];
@@ -1011,6 +1053,85 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
                 On-chain sync issue: {payoutStatus.lastError}
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-card/70 rounded-xl border border-border p-6">
+        <h2 className="text-lg font-semibold mb-4">Revenue Reality Check (24h)</h2>
+        {!revenueFunnel && <p className="text-sm text-muted-foreground">Revenue funnel belum tersedia.</p>}
+        {revenueFunnel && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <InfoBox label="Visitors" value={String(safeNumber(revenueFunnel.visitors24h))} />
+              <InfoBox label="Clicks" value={String(safeNumber(revenueFunnel.clicks24h))} />
+              <InfoBox label="Affiliate Sales" value={formatCurrency(revenueFunnel.affiliateSalesUsd24h)} />
+              <InfoBox label="SaaS Sales" value={formatCurrency(revenueFunnel.saasSalesUsd24h)} />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Total real revenue 24h:{' '}
+              <span className="text-foreground font-medium">
+                {formatCurrency(safeNumber(revenueFunnel.affiliateSalesUsd24h) + safeNumber(revenueFunnel.saasSalesUsd24h))}
+              </span>
+            </p>
+            {revenueBlockers.length === 0 && (
+              <p className="text-sm text-success">No blocker detected. Pipeline siap scale.</p>
+            )}
+            {revenueBlockers.length > 0 && (
+              <div className="space-y-2">
+                {revenueBlockers.slice(0, 8).map((blocker, index) => (
+                  <div
+                    key={`${String(blocker.code)}_${index}`}
+                    className={`rounded-lg p-3 text-sm border ${
+                      blocker.severity === 'critical'
+                        ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                        : 'border-warning/40 bg-warning/10 text-warning'
+                    }`}
+                  >
+                    [{String(blocker.code)}] {String(blocker.message)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-card/70 rounded-xl border border-border p-6">
+        <h2 className="text-lg font-semibold mb-4">Dormant Wallet Intel (Analytics Only)</h2>
+        {!dormantWalletIntel && <p className="text-sm text-muted-foreground">Dormant wallet intel belum tersedia.</p>}
+        {dormantWalletIntel && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <InfoBox label="Chain" value={dormantWalletIntel.chain || 'n/a'} accent="primary" />
+              <InfoBox label="Scanned Wallets" value={String(safeNumber(dormantWalletIntel.scannedWallets))} />
+              <InfoBox label="Estimated Value" value={formatCurrency(dormantWalletIntel.totalEstimatedUsd)} />
+              <InfoBox label="Collectible" value={formatCurrency(dormantWalletIntel.collectibleEstimatedUsd)} />
+            </div>
+            <p className="text-sm text-warning">{String(dormantWalletIntel.note || '')}</p>
+            <p className="text-xs text-muted-foreground">Last scan: {formatRelativeTime(dormantWalletIntel.generatedAt)}</p>
+            <div className="space-y-2">
+              {(dormantWalletIntel.candidates || []).slice(0, 6).map((wallet) => (
+                <div key={String(wallet.address)} className="rounded-lg border border-border/70 p-3">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 rounded text-xs bg-primary/20 text-primary">
+                      {String(wallet.label || wallet.category || 'wallet')}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-xs bg-warning/20 text-warning">
+                      {wallet.dormantLikely ? 'dormant-likely' : 'active/unknown'}
+                    </span>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      est. {formatCurrency(wallet.estimatedUsd)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground break-all">{String(wallet.address)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    BNB {safeNumber(wallet.nativeBalance).toFixed(6)} | USDT {safeNumber(wallet.usdtBalance).toFixed(4)} | nonce {safeNumber(wallet.txCount)}
+                  </p>
+                  <p className="text-xs text-warning mt-1">{String(wallet.reason || '')}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

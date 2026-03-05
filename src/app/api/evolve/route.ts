@@ -4,6 +4,7 @@ import tursoClient, { initializeDatabase } from '@/lib/db';
 import { getMonetizationDashboard } from '@/lib/monetization';
 import { getOnchainWalletConfig, syncOnchainUsdtPayments } from '@/lib/onchain';
 import { getCryptoActionTasks, getCryptoEngineStatus, getCryptoOpportunities, getCryptoSubmissions, runCryptoRevenueCycle } from '@/lib/crypto-engine';
+import { getDormantWalletIntel } from '@/lib/dormant-wallet-intel';
 import { readSystemStatusMirror, writeSystemStatusMirror } from '@/lib/system-status-mirror';
 
 type OperationMode = 'free_manual' | 'free_autonomous';
@@ -362,6 +363,9 @@ function buildMirrorPayload(status: Record<string, any>) {
       payoutStatus: status.admin?.payoutStatus || null,
       autopilotStatus: status.admin?.autopilotStatus || null,
       cryptoStatus: status.admin?.cryptoStatus || null,
+      revenueFunnel: status.admin?.revenueFunnel || null,
+      revenueBlockers: Array.isArray(status.admin?.revenueBlockers) ? status.admin.revenueBlockers : [],
+      dormantWalletIntel: status.admin?.dormantWalletIntel || null,
       cryptoOpportunities: Array.isArray(status.admin?.cryptoOpportunities) ? status.admin.cryptoOpportunities : [],
       cryptoActionTasks: Array.isArray(status.admin?.cryptoActionTasks) ? status.admin.cryptoActionTasks : [],
       cryptoSubmissions: Array.isArray(status.admin?.cryptoSubmissions) ? status.admin.cryptoSubmissions : [],
@@ -406,6 +410,12 @@ function applyMirror(liveStatus: Record<string, any>, mirrorData: Record<string,
     admin: {
       ...(liveStatus.admin || {}),
       cryptoStatus: mirrorData.admin?.cryptoStatus || liveStatus.admin?.cryptoStatus || null,
+      revenueFunnel: liveStatus.admin?.revenueFunnel || mirrorData.admin?.revenueFunnel || null,
+      revenueBlockers:
+        Array.isArray(liveStatus.admin?.revenueBlockers) && liveStatus.admin.revenueBlockers.length > 0
+          ? liveStatus.admin.revenueBlockers
+          : mirrorData.admin?.revenueBlockers || [],
+      dormantWalletIntel: liveStatus.admin?.dormantWalletIntel || mirrorData.admin?.dormantWalletIntel || null,
       cryptoOpportunities:
         Array.isArray(liveStatus.admin?.cryptoOpportunities) && liveStatus.admin.cryptoOpportunities.length > 0
           ? liveStatus.admin.cryptoOpportunities
@@ -550,6 +560,112 @@ async function getRevenueTrend() {
   return result.rows;
 }
 
+async function getRevenueFunnel24h() {
+  const result = await tursoClient.execute({
+    sql: `
+      SELECT
+        SUM(CASE WHEN event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views,
+        SUM(CASE WHEN event_type = 'affiliate_click' THEN 1 ELSE 0 END) AS affiliate_clicks,
+        ROUND(COALESCE(SUM(CASE WHEN event_type = 'affiliate_sale' THEN value ELSE 0 END), 0), 2) AS affiliate_sales_usd,
+        ROUND(COALESCE(SUM(CASE WHEN event_type = 'saas_sale' THEN value ELSE 0 END), 0), 2) AS saas_sales_usd
+      FROM tracking_events
+      WHERE created_at >= datetime('now', '-1 day')
+    `,
+    args: [],
+  });
+
+  return {
+    visitors24h: safeNumber(result.rows[0]?.page_views),
+    clicks24h: safeNumber(result.rows[0]?.affiliate_clicks),
+    affiliateSalesUsd24h: safeNumber(result.rows[0]?.affiliate_sales_usd),
+    saasSalesUsd24h: safeNumber(result.rows[0]?.saas_sales_usd),
+  };
+}
+
+function buildRevenueBlockers(input: {
+  funnel: {
+    visitors24h: number;
+    clicks24h: number;
+    affiliateSalesUsd24h: number;
+    saasSalesUsd24h: number;
+  };
+  payoutStatus: {
+    configured: boolean;
+    lastError: string | null;
+  };
+  cryptoStatus: Record<string, any> | null | undefined;
+  cryptoSubmissions: Array<Record<string, any>>;
+}): Array<{ severity: 'warning' | 'critical'; code: string; message: string }> {
+  const blockers: Array<{ severity: 'warning' | 'critical'; code: string; message: string }> = [];
+  const revenue24h = Number((input.funnel.affiliateSalesUsd24h + input.funnel.saasSalesUsd24h).toFixed(2));
+
+  if (input.funnel.visitors24h <= 0) {
+    blockers.push({
+      severity: 'critical',
+      code: 'no_traffic_24h',
+      message: 'Tidak ada traffic 24 jam terakhir, jadi tidak ada jalur konversi uang.',
+    });
+  }
+
+  if (input.funnel.visitors24h > 0 && input.funnel.clicks24h <= 0) {
+    blockers.push({
+      severity: 'warning',
+      code: 'no_clicks_24h',
+      message: 'Traffic ada, tapi belum ada affiliate click 24 jam terakhir.',
+    });
+  }
+
+  if (revenue24h <= 0) {
+    blockers.push({
+      severity: 'critical',
+      code: 'no_revenue_24h',
+      message: 'Belum ada event penjualan real (affiliate_sale/saas_sale) 24 jam terakhir.',
+    });
+  }
+
+  if (!input.payoutStatus.configured) {
+    blockers.push({
+      severity: 'critical',
+      code: 'payout_not_configured',
+      message: 'Wallet payout belum valid, jalur pencatatan on-chain tidak aktif penuh.',
+    });
+  }
+
+  if (input.payoutStatus.lastError) {
+    blockers.push({
+      severity: 'warning',
+      code: 'onchain_sync_issue',
+      message: `Sinkronisasi on-chain bermasalah: ${input.payoutStatus.lastError}`,
+    });
+  }
+
+  const lastSubmitted = safeNumber(input.cryptoStatus?.executor?.lastSubmitted);
+  const lastFailed = safeNumber(input.cryptoStatus?.executor?.lastFailed);
+  if (lastSubmitted <= 0 && lastFailed > 0) {
+    blockers.push({
+      severity: 'critical',
+      code: 'crypto_submit_failed',
+      message: 'Executor crypto gagal submit, sehingga pipeline payout tidak masuk tahap review.',
+    });
+  }
+
+  const permissionFailures = input.cryptoSubmissions.filter((submission) => {
+    const message = String(submission.message || '');
+    const error = String(submission.error || '');
+    return isLegacyGithubPermissionFailure(message) || isLegacyGithubPermissionFailure(error);
+  }).length;
+
+  if (permissionFailures > 0) {
+    blockers.push({
+      severity: 'critical',
+      code: 'github_permission_blocked',
+      message: `${permissionFailures} submission terblokir permission GitHub (403 token access).`,
+    });
+  }
+
+  return blockers;
+}
+
 function shouldRunAutonomousEvolution(
   operationMode: OperationMode,
   autoIntervalMinutes: number,
@@ -612,9 +728,11 @@ async function getSystemStatus() {
       payoutStatus,
       autopilotStatus,
       cryptoStatus,
+      revenueFunnel,
       cryptoOpportunities,
       cryptoActionTasks,
       cryptoSubmissions,
+      dormantWalletIntel,
     ] =
       await Promise.all([
         tursoClient.execute({
@@ -641,9 +759,11 @@ async function getSystemStatus() {
         getPayoutStatus(),
         getAutopilotStatus(),
         getCryptoEngineStatus(),
+        getRevenueFunnel24h(),
         getCryptoOpportunities(12),
         getCryptoActionTasks(12),
         getCryptoSubmissions(12),
+        getDormantWalletIntel(false),
       ]);
 
     const operationMode = DEFAULT_OPERATION_MODE;
@@ -653,6 +773,14 @@ async function getSystemStatus() {
     const nextAutoEvolutionAt = lastEvolutionAt
       ? new Date(new Date(lastEvolutionAt).getTime() + autoIntervalMinutes * 60 * 1000).toISOString()
       : new Date(Date.now() + autoIntervalMinutes * 60 * 1000).toISOString();
+
+    const normalizedSubmissions = normalizeSubmissionsForDisplay(cryptoSubmissions);
+    const revenueBlockers = buildRevenueBlockers({
+      funnel: revenueFunnel,
+      payoutStatus,
+      cryptoStatus,
+      cryptoSubmissions: normalizedSubmissions,
+    });
 
     const liveStatus = {
       lastActivity: safeDateToISO(logsResult.rows[0]?.created_at),
@@ -677,9 +805,12 @@ async function getSystemStatus() {
         payoutStatus,
         autopilotStatus,
         cryptoStatus,
+        revenueFunnel,
+        revenueBlockers,
+        dormantWalletIntel,
         cryptoOpportunities,
         cryptoActionTasks,
-        cryptoSubmissions: normalizeSubmissionsForDisplay(cryptoSubmissions),
+        cryptoSubmissions: normalizedSubmissions,
       },
       cryptoTriggered,
     };
