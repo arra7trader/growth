@@ -1,13 +1,13 @@
 {
-  "snapshotAt": "2026-03-05T02:12:01.703Z",
+  "snapshotAt": "2026-03-05T02:15:02.105Z",
   "source": "api_evolve_status",
-  "fingerprint": "bd2f55e4f13a0e31b3ab16fb4d308936fa7abff1",
+  "fingerprint": "42dbfb0fdec567db1d309b787fe64f9b265d1141",
   "data": {
-    "capturedAt": "2026-03-05T02:12:01.642Z",
+    "capturedAt": "2026-03-05T02:15:02.024Z",
     "systemHealth": "operational",
     "systemMode": "free_real",
     "operationMode": "free_autonomous",
-    "lastActivity": "2026-03-05T02:08:01.000Z",
+    "lastActivity": "2026-03-05T02:14:01.000Z",
     "lastEvolutionAt": "2026-03-05T01:19:01.000Z",
     "nextAutoEvolutionAt": "2026-03-05T04:19:01.000Z",
     "cryptoTriggered": false,
@@ -16,7 +16,7 @@
         "status": "running",
         "lastStartedAt": "2026-03-05T01:18:01.848Z",
         "lastFinishedAt": null,
-        "lastHeartbeatAt": "2026-03-05T02:12:01.486Z",
+        "lastHeartbeatAt": "2026-03-05T02:15:01.932Z",
         "lastError": null,
         "runner": {
           "running": true,
@@ -39,7 +39,7 @@
         "strategy": "request_driven",
         "requiresTraffic": true,
         "pulseIntervalSeconds": 45,
-        "lastPulseAt": "2026-03-05T02:12:01.571Z",
+        "lastPulseAt": "2026-03-05T02:15:01.933Z",
         "lastPulseSource": "browser_heartbeat"
       },
       "cryptoStatus": {
