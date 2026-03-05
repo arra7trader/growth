@@ -1,13 +1,13 @@
 {
-  "snapshotAt": "2026-03-05T04:11:01.556Z",
+  "snapshotAt": "2026-03-05T04:14:01.556Z",
   "source": "api_evolve_status",
-  "fingerprint": "034b24c392efa841c87a0a8589beb427e45c528c",
+  "fingerprint": "3608ad5838dcd29fad5fa7c20b3f05bc9885aa16",
   "data": {
-    "capturedAt": "2026-03-05T04:11:01.483Z",
+    "capturedAt": "2026-03-05T04:14:01.490Z",
     "systemHealth": "operational",
     "systemMode": "free_real",
     "operationMode": "free_autonomous",
-    "lastActivity": "2026-03-05T04:07:01.000Z",
+    "lastActivity": "2026-03-05T04:13:01.000Z",
     "lastEvolutionAt": "2026-03-05T03:18:01.000Z",
     "nextAutoEvolutionAt": "2026-03-05T06:18:01.000Z",
     "cryptoTriggered": false,
@@ -16,7 +16,7 @@
         "status": "running",
         "lastStartedAt": "2026-03-05T03:16:01.796Z",
         "lastFinishedAt": null,
-        "lastHeartbeatAt": "2026-03-05T04:11:01.397Z",
+        "lastHeartbeatAt": "2026-03-05T04:14:01.407Z",
         "lastError": null,
         "runner": {
           "running": true,
@@ -31,15 +31,15 @@
         "tokenSymbol": "USDT",
         "tokenContract": "0x55d398326f99059fF775485246999027B3197955",
         "configured": true,
-        "lastSyncedAt": "2026-03-05T04:09:01.507Z",
-        "lastScannedBlock": 84744940,
+        "lastSyncedAt": "2026-03-05T04:13:01.485Z",
+        "lastScannedBlock": 84745060,
         "lastError": null
       },
       "autopilotStatus": {
         "strategy": "request_driven",
         "requiresTraffic": true,
         "pulseIntervalSeconds": 45,
-        "lastPulseAt": "2026-03-05T04:11:01.398Z",
+        "lastPulseAt": "2026-03-05T04:14:01.408Z",
         "lastPulseSource": "browser_heartbeat"
       },
       "cryptoStatus": {
