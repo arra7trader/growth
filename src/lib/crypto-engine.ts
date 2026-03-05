@@ -893,6 +893,18 @@ function classifyGithubCommentFailure(
   };
 }
 
+function isGithubPermissionFailure(message: string | null | undefined): boolean {
+  const text = String(message || '').toLowerCase();
+  if (!text) {
+    return false;
+  }
+  return (
+    text.includes('resource not accessible by personal access token') ||
+    (text.includes('"status":403') && text.includes('create-an-issue-comment')) ||
+    (text.includes('forbidden') && text.includes('github'))
+  );
+}
+
 function buildAutoSubmissionComment(task: CryptoActionTask): string {
   const stepLines = task.runbook.steps.map((step, index) => `${index + 1}. ${step}`).join('\n');
 
@@ -1496,6 +1508,72 @@ async function runSubmissionLifecycleMonitor() {
     intervalMinutes,
     limit: monitorLimit,
   };
+}
+
+async function normalizeLegacyPermissionFailures() {
+  const result = await tursoClient.execute({
+    sql: `
+      SELECT content_key, content_data, updated_at
+      FROM dynamic_content
+      WHERE content_type = 'crypto_submission'
+      ORDER BY updated_at DESC
+      LIMIT 120
+    `,
+    args: [],
+  });
+
+  const candidates = result.rows
+    .map((row) => parseSubmissionRecord(row.content_key, row.content_data, row.updated_at))
+    .filter((record): record is CryptoSubmissionRecord => Boolean(record))
+    .filter((record) => record.channel === 'github_issue_comment' && record.state === 'failed')
+    .filter((record) => isGithubPermissionFailure(record.error) || isGithubPermissionFailure(record.message));
+
+  if (candidates.length === 0) {
+    return 0;
+  }
+
+  for (const record of candidates) {
+    const nextRecord: CryptoSubmissionRecord = {
+      ...record,
+      channel: 'outbox',
+      state: 'skipped',
+      message: 'Skipped GitHub submission: token has no write access to target repository.',
+      lifecycle: {
+        stage: 'skipped',
+        acceptedSignal: false,
+        paidSignal: false,
+        source: 'initial',
+        confidence: 20,
+        notes: ['Permission failure normalized to skipped/outbox to prevent repeated hard failures.'],
+        lastCheckedAt: new Date().toISOString(),
+      },
+    };
+
+    await tursoClient.execute({
+      sql: `
+        INSERT INTO dynamic_content (content_type, content_key, content_data, metadata)
+        VALUES ('crypto_submission', ?, ?, ?)
+        ON CONFLICT(content_key) DO UPDATE SET
+          content_data = excluded.content_data,
+          metadata = excluded.metadata,
+          updated_at = CURRENT_TIMESTAMP
+      `,
+      args: [
+        nextRecord.submissionKey,
+        JSON.stringify(nextRecord),
+        JSON.stringify({
+          taskKey: nextRecord.taskKey,
+          channel: nextRecord.channel,
+          state: nextRecord.state,
+          stage: nextRecord.lifecycle?.stage || null,
+          acceptedSignal: false,
+          paidSignal: false,
+        }),
+      ],
+    });
+  }
+
+  return candidates.length;
 }
 
 async function submitToGithubIssueComment(task: CryptoActionTask): Promise<SubmissionOutcome> {
@@ -2516,6 +2594,13 @@ export async function getCryptoActionTasks(limit = 12) {
 }
 
 export async function getCryptoSubmissions(limit = 12) {
+  const normalizedCount = await normalizeLegacyPermissionFailures();
+  if (normalizedCount > 0) {
+    await logCrypto('warn', 'Normalized legacy GitHub permission failures to skipped/outbox', {
+      normalizedCount,
+    });
+  }
+
   const result = await tursoClient.execute({
     sql: `
       SELECT content_key, content_data, updated_at
