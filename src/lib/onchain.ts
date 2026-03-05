@@ -130,6 +130,49 @@ async function rpcCall<T>(method: string, params: unknown[]): Promise<T> {
   throw new Error(lastError);
 }
 
+async function getLogsAdaptiveRange(args: {
+  tokenContract: string;
+  walletAddress: string;
+  fromBlock: number;
+  toBlock: number;
+}): Promise<EvmLog[]> {
+  const allLogs: EvmLog[] = [];
+  let cursor = Math.max(1, args.fromBlock);
+  const endBlock = Math.max(cursor, args.toBlock);
+  let span = Math.max(20, endBlock - cursor + 1);
+
+  while (cursor <= endBlock) {
+    const chunkTo = Math.min(endBlock, cursor + span - 1);
+
+    try {
+      const logs = await rpcCall<EvmLog[]>('eth_getLogs', [
+        {
+          address: args.tokenContract,
+          fromBlock: numberToHex(cursor),
+          toBlock: numberToHex(chunkTo),
+          topics: [TRANSFER_TOPIC, null, addressTopic(args.walletAddress)],
+        },
+      ]);
+
+      allLogs.push(...logs);
+      cursor = chunkTo + 1;
+
+      if (logs.length === 0 && span < 240) {
+        span = Math.min(240, span * 2);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (isRateLimitError(message) && span > 20) {
+        span = Math.max(20, Math.floor(span / 2));
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  return allLogs;
+}
+
 async function getSetting(key: string): Promise<string | null> {
   const result = await tursoClient.execute({
     sql: 'SELECT setting_value FROM system_settings WHERE setting_key = ? LIMIT 1',
@@ -259,14 +302,12 @@ export async function syncOnchainUsdtPayments(): Promise<{
       };
     }
 
-    const logs = await rpcCall<EvmLog[]>('eth_getLogs', [
-      {
-        address: wallet.tokenContract,
-        fromBlock: numberToHex(fromBlock),
-        toBlock: numberToHex(toBlock),
-        topics: [TRANSFER_TOPIC, null, addressTopic(wallet.address)],
-      },
-    ]);
+    const logs = await getLogsAdaptiveRange({
+      tokenContract: wallet.tokenContract,
+      walletAddress: wallet.address,
+      fromBlock,
+      toBlock,
+    });
 
     let newTransfers = 0;
     let totalAmount = 0;

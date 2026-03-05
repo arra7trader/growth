@@ -326,6 +326,78 @@ function formatRelativeTime(value: string | null | undefined): string {
   return formatDistanceToNow(d, { addSuffix: true });
 }
 
+function isLegacyGithubPermissionFailure(value: unknown): boolean {
+  const text = String(value || '').toLowerCase();
+  if (!text) {
+    return false;
+  }
+  return (
+    text.includes('resource not accessible by personal access token') ||
+    (text.includes('create-an-issue-comment') && text.includes('status') && text.includes('403'))
+  );
+}
+
+function normalizeSubmissionForDisplay(submission: AdminCryptoSubmission): AdminCryptoSubmission {
+  const channel = String(submission.channel || '');
+  const state = String(submission.state || '');
+  const stage = String(submission.lifecycle?.stage || '');
+  const legacy403 =
+    channel === 'github_issue_comment' &&
+    (state === 'failed' || stage === 'failed') &&
+    (isLegacyGithubPermissionFailure(submission.message) || isLegacyGithubPermissionFailure(submission.error));
+
+  if (!legacy403) {
+    return submission;
+  }
+
+  return {
+    ...submission,
+    channel: 'outbox',
+    state: 'skipped',
+    message: 'Skipped GitHub submission: token has no write access to target repository.',
+    error: null,
+    lifecycle: {
+      ...(submission.lifecycle || {}),
+      stage: 'skipped',
+      acceptedSignal: false,
+      paidSignal: false,
+      confidence: safeNumber(submission.lifecycle?.confidence) || 20,
+      lastCheckedAt: submission.lifecycle?.lastCheckedAt || new Date().toISOString(),
+    },
+  };
+}
+
+function submissionStateClass(state: unknown): string {
+  const normalized = String(state || '').toLowerCase();
+  if (normalized === 'submitted') {
+    return 'bg-primary/20 text-primary';
+  }
+  if (normalized === 'failed') {
+    return 'bg-destructive/20 text-destructive';
+  }
+  if (normalized === 'skipped') {
+    return 'bg-warning/20 text-warning';
+  }
+  return 'bg-success/20 text-success';
+}
+
+function submissionStageClass(stage: unknown): string {
+  const normalized = String(stage || '').toLowerCase();
+  if (normalized === 'paid_signal') {
+    return 'bg-success/20 text-success';
+  }
+  if (normalized === 'accepted_signal') {
+    return 'bg-primary/20 text-primary';
+  }
+  if (normalized === 'failed') {
+    return 'bg-destructive/20 text-destructive';
+  }
+  if (normalized === 'skipped') {
+    return 'bg-warning/20 text-warning';
+  }
+  return 'bg-muted text-muted-foreground';
+}
+
 function labelForMode(mode?: OperationMode): string {
   if (mode === 'free_manual') {
     return 'FREE MANUAL';
@@ -878,7 +950,7 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
   const cryptoStatus = admin.cryptoStatus;
   const cryptoOpportunities = admin.cryptoOpportunities || [];
   const cryptoActionTasks = admin.cryptoActionTasks || [];
-  const cryptoSubmissions = admin.cryptoSubmissions || [];
+  const cryptoSubmissions = (admin.cryptoSubmissions || []).map((item) => normalizeSubmissionForDisplay(item));
   const cycleHistory = (cryptoStatus?.cycleHistory || []).slice(0, 12).reverse();
   const maxCycleSubmitted = Math.max(1, ...cycleHistory.map((item) => safeNumber(item.submittedActions)));
   const maxCycleExecuted = Math.max(1, ...cycleHistory.map((item) => safeNumber(item.executedActions)));
@@ -1183,20 +1255,10 @@ function AdminTab({ admin }: { admin?: SystemStatus['admin'] }) {
                       <span className="px-2 py-0.5 rounded text-xs bg-primary/20 text-primary">
                         {String(submission.channel || 'unknown')}
                       </span>
-                      <span className="px-2 py-0.5 rounded text-xs bg-success/20 text-success">
+                      <span className={`px-2 py-0.5 rounded text-xs ${submissionStateClass(submission.state)}`}>
                         {String(submission.state || 'unknown')}
                       </span>
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs ${
-                          submission.lifecycle?.stage === 'paid_signal'
-                            ? 'bg-success/20 text-success'
-                            : submission.lifecycle?.stage === 'accepted_signal'
-                            ? 'bg-primary/20 text-primary'
-                            : submission.lifecycle?.stage === 'failed'
-                            ? 'bg-destructive/20 text-destructive'
-                            : 'bg-muted text-muted-foreground'
-                        }`}
-                      >
+                      <span className={`px-2 py-0.5 rounded text-xs ${submissionStageClass(submission.lifecycle?.stage)}`}>
                         {String(submission.lifecycle?.stage || 'n/a')}
                       </span>
                       <span className="ml-auto text-xs text-muted-foreground">

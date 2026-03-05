@@ -52,6 +52,66 @@ function safeDateToISO(value: unknown): string | null {
   return date.toISOString();
 }
 
+function isLegacyGithubPermissionFailure(value: unknown): boolean {
+  const text = String(value || '').toLowerCase();
+  if (!text) {
+    return false;
+  }
+
+  return (
+    text.includes('resource not accessible by personal access token') ||
+    (text.includes('create-an-issue-comment') && text.includes('status') && text.includes('403')) ||
+    (text.includes('github submission failed (403)') && text.includes('personal access token'))
+  );
+}
+
+function normalizeSubmissionRecord(record: Record<string, any>): Record<string, any> {
+  const channel = String(record.channel || '');
+  const state = String(record.state || '');
+  const lifecycleStage = String(record.lifecycle?.stage || '');
+  const message = String(record.message || '');
+  const error = String(record.error || '');
+
+  const legacy403 =
+    channel === 'github_issue_comment' &&
+    (state === 'failed' || lifecycleStage === 'failed') &&
+    (isLegacyGithubPermissionFailure(message) || isLegacyGithubPermissionFailure(error));
+
+  if (!legacy403) {
+    return record;
+  }
+
+  const lifecycle = record.lifecycle && typeof record.lifecycle === 'object' ? { ...record.lifecycle } : {};
+  const notes = Array.isArray(lifecycle.notes) ? [...lifecycle.notes] : [];
+  if (!notes.some((note) => String(note).toLowerCase().includes('permission'))) {
+    notes.push('Permission failure normalized to skipped/outbox for autonomous stability.');
+  }
+
+  return {
+    ...record,
+    channel: 'outbox',
+    state: 'skipped',
+    message: 'Skipped GitHub submission: token has no write access to target repository.',
+    error: null,
+    lifecycle: {
+      ...lifecycle,
+      stage: 'skipped',
+      acceptedSignal: false,
+      paidSignal: false,
+      confidence: Number(lifecycle.confidence) || 20,
+      notes,
+      lastCheckedAt: lifecycle.lastCheckedAt || new Date().toISOString(),
+    },
+  };
+}
+
+function normalizeSubmissionsForDisplay(input: unknown): Record<string, any>[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  return input.map((item) => normalizeSubmissionRecord(item as Record<string, any>));
+}
+
 async function getSetting(key: string): Promise<string | null> {
   const result = await tursoClient.execute({
     sql: 'SELECT setting_value FROM system_settings WHERE setting_key = ? LIMIT 1',
@@ -335,6 +395,9 @@ function shouldPreferMirror(liveStatus: Record<string, any>, mirrorData: Record<
 }
 
 function applyMirror(liveStatus: Record<string, any>, mirrorData: Record<string, any>) {
+  const liveSubmissions = normalizeSubmissionsForDisplay(liveStatus.admin?.cryptoSubmissions);
+  const mirrorSubmissions = normalizeSubmissionsForDisplay(mirrorData.admin?.cryptoSubmissions);
+
   return {
     ...liveStatus,
     lastActivity: liveStatus.lastActivity || mirrorData.lastActivity || null,
@@ -352,9 +415,9 @@ function applyMirror(liveStatus: Record<string, any>, mirrorData: Record<string,
           ? liveStatus.admin.cryptoActionTasks
           : mirrorData.admin?.cryptoActionTasks || [],
       cryptoSubmissions:
-        Array.isArray(liveStatus.admin?.cryptoSubmissions) && liveStatus.admin.cryptoSubmissions.length > 0
-          ? liveStatus.admin.cryptoSubmissions
-          : mirrorData.admin?.cryptoSubmissions || [],
+        liveSubmissions.length > 0
+          ? liveSubmissions
+          : mirrorSubmissions,
     },
     mirror: {
       used: true,
@@ -616,7 +679,7 @@ async function getSystemStatus() {
         cryptoStatus,
         cryptoOpportunities,
         cryptoActionTasks,
-        cryptoSubmissions,
+        cryptoSubmissions: normalizeSubmissionsForDisplay(cryptoSubmissions),
       },
       cryptoTriggered,
     };
